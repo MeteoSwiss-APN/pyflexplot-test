@@ -3,6 +3,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -20,6 +21,7 @@ from .main import create_plots
 from .main import install_exe
 from .main import prepare_clone
 from .main import prepare_work_path
+from .utils import check_paths_equiv
 from .utils import git_get_remote_tags
 from .utils import tmp_path
 
@@ -211,7 +213,6 @@ def cli(
         clone_path=clones_path / new_rev,
         work_path=work_dir_path / "work" / new_rev,
     )
-
     plot_cfg = PlotConfig(
         presets=presets,
         infiles=infiles,
@@ -220,8 +221,23 @@ def cli(
         only=only,
     )
 
-    create_clone_and_plots(ctx, repo_path, "old", old_repo_cfg, plot_cfg, cfg)
-    create_clone_and_plots(ctx, repo_path, "new", new_repo_cfg, plot_cfg, cfg)
+    # Create plots
+    old_plot_paths = create_clone_and_plots(
+        ctx, repo_path, "old", old_repo_cfg, plot_cfg, cfg
+    )
+    new_plot_paths = create_clone_and_plots(
+        ctx, repo_path, "new", new_repo_cfg, plot_cfg, cfg
+    )
+    check_paths_equiv(
+        paths1=old_plot_paths,
+        paths2=new_plot_paths,
+        base1=old_repo_cfg.work_path,
+        base2=new_repo_cfg.work_path,
+        action="warn",
+        del_missing=True,
+    )
+
+    # Compare plots
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
@@ -232,7 +248,7 @@ def create_clone_and_plots(
     repo_cfg: RepoConfig,
     plot_cfg: PlotConfig,
     cfg: RunConfig,
-) -> None:
+) -> List[Path]:
 
     # Create clone of repository
     print(f"prepare {case} clone: {repo_path}@{repo_cfg.rev} -> {repo_cfg.clone_path}")
@@ -263,5 +279,6 @@ def create_clone_and_plots(
             file=sys.stderr,
         )
         ctx.exit(1)
-    os.chdir(repo_cfg.work_path)
-    create_plots(exe_path, plot_cfg, cfg)
+    plot_paths = create_plots(exe_path, repo_cfg.work_path, plot_cfg, cfg)
+
+    return plot_paths

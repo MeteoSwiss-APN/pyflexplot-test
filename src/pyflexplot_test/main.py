@@ -104,22 +104,36 @@ def prepare_work_path(work_path: Path, cfg: RunConfig) -> None:
     work_path.mkdir(parents=True, exist_ok=True)
 
 
-def create_plots(exe_path: Path, plot_cfg: PlotConfig, cfg: RunConfig) -> None:
+def create_plots(
+    exe_path: Path, work_path: Path, plot_cfg: PlotConfig, cfg: RunConfig
+) -> List[Path]:
     """Create plots for multiple presets with one call per preset."""
-    if plot_cfg.data_path:
-        Path("data").symlink_to(plot_cfg.data_path)
+    plot_paths: List[Path] = []
     for preset, infile in zip_presets_infiles(plot_cfg):
-        create_plots_preset(exe_path, preset, infile, plot_cfg, cfg)
+        plot_paths.extend(
+            create_plots_preset(exe_path, work_path, preset, infile, plot_cfg, cfg)
+        )
+    return plot_paths
 
 
 def create_plots_preset(
     exe_path: Path,
+    work_path: Path,
     preset: str,
     infile: Optional[str],
     plot_cfg: PlotConfig,
     cfg: RunConfig,
-) -> None:
+) -> List[Path]:
     """Create plots for an individual preset."""
+    os.chdir(work_path)
+    if plot_cfg.data_path:
+        data_path = Path("data")
+        if data_path.exists():
+            if not data_path.is_symlink():
+                raise Exception(f"{data_path.absolute()} exists and is not a symlink")
+            data_path.unlink()
+        Path("data").symlink_to(plot_cfg.data_path)
+
     cmd_args = [str(exe_path)]
     cmd_args.append(f"--num-procs={plot_cfg.num_procs}")
     cmd_args.append(f"--preset={preset}")
@@ -157,3 +171,14 @@ def create_plots_preset(
             print(f"\r{prog} {i_plot}/{n_plots}", end="", flush=True)
     if not cfg.verbose:
         print()
+
+    # Check that plots have been created as expected
+    plot_paths: List[Path] = []
+    for plot in plots:
+        plot_path = work_path / plot
+        if not plot_path.exists():
+            print(f"warning: plot has not been created: {plot}")
+        else:
+            plot_paths.append(plot_path)
+
+    return plot_paths
