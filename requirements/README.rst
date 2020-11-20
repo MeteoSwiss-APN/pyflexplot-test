@@ -8,4 +8,3 @@ The dependencies are managed as follows:
     To update pinned dependencies (run, dev, tox, precommit), use the respective `make update-*-deps`.
     (Note: Pre-commit dependencies are specified in `.pre-commit-config.yaml`, not in a requirements file.)
 -   To update all pinned dependencies at once, run `make update-deps` (caution: must be updated don't use `-j[N]`).
-
