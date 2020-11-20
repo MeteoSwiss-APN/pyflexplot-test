@@ -138,10 +138,10 @@ class PlotConfig:
     default=1,
 )
 @click.option(
-    "--ref-rev",
+    "--old-rev",
     help=(
-        "reference revision of pyflexplot; defaults to latest tag; may be a"
-        " tag name, branch name or commit hash"
+        "old revision of pyflexplot; defaults to lanew tag; may be anything"
+        " that git can check out (tag name, branch name, commit hash)"
     ),
 )
 @click.option(
@@ -151,10 +151,11 @@ class PlotConfig:
     default="git@github.com:MeteoSwiss-APN/pyflexplot.git",
 )
 @click.option(
-    "--test-rev",
+    "--new-rev",
     help=(
-        "test revision of pyflexplot; defaults to 'dev' (head of development)"
-        " branch); may be a tag name, branch name or commit hash"
+        "new revision of pyflexplot; defaults to 'dev' (head of development"
+        " branch); may be anything that git can check out (tag name, branch"
+        " name, commit hash"
     ),
     default="dev",
 )
@@ -162,7 +163,7 @@ class PlotConfig:
     "--work-dir",
     "work_dir_path",
     help="working directory",
-    default=tmp_path("pyflexplot-test-"),
+    default=tmp_path("pyflexplot-new-"),
     type=PathlibPath(),
 )
 @click.option("-v", "verbose", help="verbose output", is_flag=True, default=False)
@@ -180,9 +181,9 @@ def cli(
     num_procs: int,
     only: Optional[int],
     presets: Tuple[str, ...],
-    ref_rev: Optional[str],
+    old_rev: Optional[str],
     repo_path: str,
-    test_rev: str,
+    new_rev: str,
     work_dir_path: Path,
     **cfg_kwargs,
 ) -> None:
@@ -208,35 +209,35 @@ def cli(
         print(f"num_procs: {num_procs}")
         print(f"only: {only}")
         print(f"presets: {presets}")
-        print(f"ref_rev: {ref_rev}")
+        print(f"old_rev: {old_rev}")
         print(f"repo_path: {repo_path}")
-        print(f"test_rev: {test_rev}")
+        print(f"new_rev: {new_rev}")
         print(f"work_dir_path: {work_dir_path}")
 
-    if ref_rev is None:
+    if old_rev is None:
         if cfg.verbose:
-            print(f"obtain ref_rev from repo: {repo_path}")
+            print(f"obtain old_rev from repo: {repo_path}")
         tags = git_get_remote_tags(repo_path)
         if cfg.verbose:
             print(f"select most recent of {len(tags)} tags ({', '.join(tags)})")
-        ref_rev = tags[-1]
+        old_rev = tags[-1]
         if cfg.verbose:
-            print(f"ref_rev: {ref_rev}")
+            print(f"old_rev: {old_rev}")
 
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
 
-    ref_clone_path = clones_path / ref_rev
-    test_clone_path = clones_path / test_rev
+    old_clone_path = clones_path / old_rev
+    new_clone_path = clones_path / new_rev
 
-    ref_work_path = work_dir_path / "work" / ref_rev
-    test_work_path = work_dir_path / "work" / test_rev
+    old_work_path = work_dir_path / "work" / old_rev
+    new_work_path = work_dir_path / "work" / new_rev
 
-    ref_repo_cfg = RepoConfig(
-        clone_path=ref_clone_path, rev=ref_rev, work_path=ref_work_path
+    old_repo_cfg = RepoConfig(
+        clone_path=old_clone_path, rev=old_rev, work_path=old_work_path
     )
-    test_repo_cfg = RepoConfig(
-        clone_path=test_clone_path, rev=test_rev, work_path=test_work_path
+    new_repo_cfg = RepoConfig(
+        clone_path=new_clone_path, rev=new_rev, work_path=new_work_path
     )
 
     plot_cfg = PlotConfig(
@@ -247,8 +248,8 @@ def cli(
         only=only,
     )
 
-    create_clone_and_plots(ctx, repo_path, "ref", ref_repo_cfg, plot_cfg, cfg)
-    create_clone_and_plots(ctx, repo_path, "test", test_repo_cfg, plot_cfg, cfg)
+    create_clone_and_plots(ctx, repo_path, "old", old_repo_cfg, plot_cfg, cfg)
+    create_clone_and_plots(ctx, repo_path, "new", new_repo_cfg, plot_cfg, cfg)
 
 
 def create_clone_and_plots(
