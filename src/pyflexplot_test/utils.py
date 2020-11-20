@@ -59,6 +59,7 @@ def check_paths_equiv(
     paths2: List[Path],
     base1: Optional[Path] = None,
     base2: Optional[Path] = None,
+    sort_rel: bool = False,
     action: str = "raise",
     del_missing: bool = False,
 ) -> None:
@@ -69,9 +70,15 @@ def check_paths_equiv(
 
         paths2: Second collection of paths.
 
-        base1 (optional): Base paths subtracted from ``paths1``.
+        base1 (optional): Base paths subtracted from ``paths1`` to obtain
+            relative paths.
 
-        base2 (optional): Base paths subtracted from ``paths2``.
+        base2 (optional): Base paths subtracted from ``paths2`` to obtain
+            relative paths.
+
+        sort_rel (optional): Sort the paths by their relative representation.
+            If ``base1`` or ``base2`` is omitted, the respective paths are
+            sorted as is.
 
         action (optional): Action to take when a path in one collection is
             missing in the other: "raise" an exception or only "warn" the user.
@@ -86,7 +93,12 @@ def check_paths_equiv(
     if del_missing and action == "raise":
         raise ValueError("del_missing=T is incompatible with action 'raise'")
 
-    def check_paths(
+    def subtract_base(paths: List[Path], base: Optional[Path]) -> List[Path]:
+        if base is None:
+            return list(paths)
+        return [path.relative_to(base) for path in paths]
+
+    def run(
         name1: str,
         paths1: List[Path],
         base1: Optional[Path],
@@ -94,12 +106,9 @@ def check_paths_equiv(
         paths2: List[Path],
         base2: Optional[Path],
     ) -> None:
-        if base2 is None:
-            rel_paths2 = list(paths2)
-        else:
-            rel_paths2 = [path2.relative_to(base2) for path2 in paths2]
-        for path1 in list(paths1):
-            rel_path1 = path1 if base1 is None else path1.relative_to(base1)
+        rel_paths1 = subtract_base(paths1, base1)
+        rel_paths2 = subtract_base(paths2, base2)
+        for path1, rel_path1 in zip(list(paths1), list(rel_paths1)):
             if rel_path1 in rel_paths2:
                 continue
             msg = f"path from relative {name1} missing in relative {name2}: {rel_path1}"
@@ -109,6 +118,14 @@ def check_paths_equiv(
                 print(f"warning: {msg}", file=sys.stderr)
             if del_missing:
                 paths1.remove(path1)
+                rel_paths1.remove(rel_path1)
+        if sort_rel:
+            paths1_sorted_by_rel = sorted(
+                [(rel_path1, path1) for path1, rel_path1 in zip(paths1, rel_paths1)]
+            )
+            paths1.clear()
+            for _, path1 in paths1_sorted_by_rel:
+                paths1.append(path1)
 
-    check_paths("paths2", paths2, base2, "paths1", paths1, base1)
-    check_paths("paths1", paths1, base1, "paths2", paths2, base2)
+    run("paths2", paths2, base2, "paths1", paths1, base1)
+    run("paths1", paths1, base1, "paths2", paths2, base2)

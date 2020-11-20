@@ -17,8 +17,10 @@ from .config import PlotConfig
 from .config import RepoConfig
 from .config import RunConfig
 from .exceptions import PathExistsError
+from .main import compare_plots
 from .main import create_plots
 from .main import install_exe
+from .main import PlotPair
 from .main import prepare_clone
 from .main import prepare_work_path
 from .utils import check_paths_equiv
@@ -202,16 +204,17 @@ def cli(
 
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
-
+    work_dir_path = work_dir_path / "work"
+    diff_dir_path = work_dir_path / f"{old_rev}_vs_{new_rev}"
     old_repo_cfg = RepoConfig(
         rev=old_rev,
         clone_path=clones_path / old_rev,
-        work_path=work_dir_path / "work" / old_rev,
+        work_path=work_dir_path / old_rev,
     )
     new_repo_cfg = RepoConfig(
         rev=new_rev,
         clone_path=clones_path / new_rev,
-        work_path=work_dir_path / "work" / new_rev,
+        work_path=work_dir_path / new_rev,
     )
     plot_cfg = PlotConfig(
         presets=presets,
@@ -233,11 +236,22 @@ def cli(
         paths2=new_plot_paths,
         base1=old_repo_cfg.work_path,
         base2=new_repo_cfg.work_path,
+        sort_rel=True,
         action="warn",
         del_missing=True,
     )
+    plot_pairs = [
+        PlotPair(
+            path1=old_path,
+            path2=new_path,
+            base1=old_repo_cfg.work_path,
+            base2=new_repo_cfg.work_path,
+        )
+        for old_path, new_path in zip(old_plot_paths, new_plot_paths)
+    ]
 
     # Compare plots
+    diff_plot_paths = compare_plots(plot_pairs, diff_dir_path, cfg)
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)

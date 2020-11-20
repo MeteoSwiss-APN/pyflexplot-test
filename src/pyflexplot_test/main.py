@@ -1,7 +1,9 @@
 """Main module."""
 # Standard library
+import filecmp
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 from typing import Optional
@@ -116,6 +118,9 @@ def create_plots(
     return plot_paths
 
 
+# pylint: disable=R0912  # too-many-branches (>12)
+# pylint: disable=R0913  # too-many-arguments (>5)
+# pylint: disable=R0914  # too-many-locals (>15)
 def create_plots_preset(
     exe_path: Path,
     work_path: Path,
@@ -182,3 +187,46 @@ def create_plots_preset(
             plot_paths.append(plot_path)
 
     return plot_paths
+
+
+@dataclass
+class PlotPair:
+    path1: Path
+    path2: Path
+    base1: Optional[Path]
+    base2: Optional[Path]
+
+    def __post_init__(self) -> None:
+        shared1 = self.path1.relative_to(self.base1) if self.base1 else self.path1
+        shared2 = self.path2.relative_to(self.base2) if self.base2 else self.path2
+        if shared1 != shared2:
+            raise ValueError(
+                "inconsistent paths and bases; shared path components differ:"
+                f" {shared1} != {shared2}"
+            )
+        self.shared_path: Path = shared1
+
+    def compare(self, cfg: RunConfig) -> Optional[Path]:
+        if filecmp.cmp(self.path1, self.path2):
+            if cfg.verbose:
+                print(f"plots are identical: {self.shared_path}")
+            return None
+        if cfg.verbose:
+            print(f"plots differ: {self.shared_path}")
+        cmd_args = []
+
+
+def compare_plots(
+    pairs: Sequence[PlotPair],
+    diff_dir_path: Path,
+    cfg: RunConfig,
+) -> List[Path]:
+    if cfg.verbose:
+        print()
+    print(f"compare {len(pairs)} pairs of plots:")
+    diff_paths: List[Path] = []
+    for pair in pairs:
+        diff_path = pair.compare(cfg)
+        if diff_path is not None:
+            diff_paths.append(diff_path)
+    return diff_paths
