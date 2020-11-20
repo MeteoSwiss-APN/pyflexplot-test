@@ -7,6 +7,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Sequence
@@ -276,7 +277,7 @@ def create_clone_and_plots(
     # Install pyflexplot into virtual env
     exe_name = "pyflexplot"
     print(f"prepare {case} {exe_name} executable in {repo_cfg.clone_path}")
-    bin_path = install(repo_cfg.clone_path)
+    bin_path = install(repo_cfg.clone_path, cfg)
     exe_path = bin_path / exe_name
 
     # Create plots
@@ -333,13 +334,16 @@ def prepare_clone(repo: str, clone_path: Path, rev: str, cfg: RunConfig) -> Repo
     return clone
 
 
-def install(clone_path: Path, exe: str = "pyflexplot") -> Path:
+def install(clone_path: Path, cfg: RunConfig, exe: str = "pyflexplot") -> Path:
     """Install pyflexplot into a virtual env and return the executable path."""
     os.chdir(clone_path)
     if not Path("Makefile").exists():
         raise Exception(f"missing Makefile in {os.path.abspath(os.curdir)}")
     venv_path = "venv"
-    run_cmd(["make", "install", "CHAIN=1", f"VENV_DIR={venv_path}"])
+    cmd_args = ["make", "install", "CHAIN=1", f"VENV_DIR={venv_path}"]
+    for line in run_cmd(cmd_args):
+        if cfg.verbose:
+            print(line)
     bin_path = Path(venv_path).absolute() / "bin"
     if not (bin_path / "python").exists():
         raise Exception(f"installation of {exe} failed: no bin directory {bin_path}")
@@ -394,15 +398,43 @@ def create_plots_preset(
         cmd_args.append(f"--setup infile {infile}")
     if plot_cfg.only:
         cmd_args.append(f"--only={plot_cfg.only}")
-    print(f"create plots: {' '.join(cmd_args)}")
-    run_cmd(cmd_args)
+
+    # Perform dry-run to obtain the plots that will be produced
+    cmd_args_dry = cmd_args + ["--dry-run"]
+    plots: List[str] = []
+    for line in run_cmd(cmd_args_dry):
+        try:
+            _, plot = line.split(" -> ")
+        except ValueError:
+            continue
+        else:
+            plots.append(plot)
+
+    # Perform actual run, using the number of plots to show progress
+    n_plots = len(plots)
+    print(f"create {n_plots} plots:")
+    print(f"$ {' '.join(cmd_args)}")
+    i_plot = 0
+    for line in run_cmd(cmd_args):
+        try:
+            _, plot = line.split(" -> ")
+        except ValueError:
+            continue
+        i_plot += 1
+        prog = f"[{i_plot / n_plots:.0%}]"
+        if cfg.verbose:
+            print(f"{prog} {line}")
+        else:
+            print(f"\r{prog} {i_plot}/{n_plots}", end="", flush=True)
+    if not cfg.verbose:
+        print()
 
 
 def git_get_remote_tags(repo: str) -> List[str]:
     """Get tags from remote git repository, sorted as version numbers."""
-    lines = run_cmd(["git", "ls-remote", "--tags", "--sort=version:refname", repo])
+    cmd_args = ["git", "ls-remote", "--tags", "--sort=version:refname", repo]
     tags: List[str] = []
-    for line in lines:
+    for line in run_cmd(cmd_args):
         try:
             # Format: "<hash>\t<refs/tags/tag>"
             _, tag = line.split("\trefs/tags/")
@@ -415,13 +447,20 @@ def git_get_remote_tags(repo: str) -> List[str]:
     return tags
 
 
-def run_cmd(args: List[str]) -> List[str]:
-    """Run a command and return the standard output."""
+def run_cmd(args: List[str]) -> Iterator[str]:
+    """Run a command and yield the standard output line by line."""
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
+    assert proc.stdout is not None  # mypy
+    with proc.stdout:
+        for raw_line in iter(proc.stdout.readline, b""):
+            line = raw_line.decode("utf-8").strip()
+            yield line
+    proc.wait()
+    assert proc.stderr is not None  # mypy
+    stderr = [line.decode("utf-8") for line in iter(proc.stderr.readline, b"")]
+    # stdout, stderr = proc.communicate()
     if proc.returncode:
         raise Exception(
-            f"error ({proc.returncode}) running command '{' '.join(args)}':"
-            f"\n{stderr.decode('utf-8')}"
+            f"error ({proc.returncode}) running command '{' '.join(args)}':\n"
+            + "\n".join(stderr)
         )
-    return list(stdout.decode("utf-8").split("\n"))
