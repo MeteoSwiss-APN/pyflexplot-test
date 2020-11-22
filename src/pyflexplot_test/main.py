@@ -165,18 +165,18 @@ def create_plots_preset(
     plot_paths: List[Path] = []
     i_plot = 0
     for i_line, line in enumerate(run_cmd(cmd_args, real_time=True)):
-        if cfg.debug:
-            print(f"({i_line}) {line}")
         try:
             _, plot = line.split(" -> ")
         except ValueError:
             continue
-        i_plot += 1
-        prog = f"[{i_plot / n_plots:.0%}]"
-        if cfg.verbose:
-            print(f"{prog} {line}")
         else:
-            print(f"\r{prog} {i_plot}/{n_plots}", end="", flush=True)
+            i_plot += 1
+        if cfg.debug:
+            print(f"[{i_line}|{i_plot / n_plots:.0%}] {line}")
+        elif cfg.verbose:
+            print(f"[{i_plot / n_plots:.0%}] {line}")
+        else:
+            print(f"\r[{i_plot / n_plots:.0%}] {i_plot}/{n_plots}", end="", flush=True)
         plot_path = work_path / plot
         plot_paths.append(plot_path)
     if not cfg.verbose:
