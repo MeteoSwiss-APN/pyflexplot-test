@@ -148,7 +148,7 @@ def create_plots_preset(
         f"--preset={preset}",
     ]
     if infile:
-        cmd_args += [f"--setup infile {infile}"]
+        cmd_args += ["--setup", "infile", infile]
     if plot_cfg.only:
         cmd_args += [f"--only={plot_cfg.only}"]
     cmd_args_dry = cmd_args + ["--dry-run"]
