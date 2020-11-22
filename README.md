@@ -78,24 +78,39 @@ Options:
 
 ## Getting started
 
+### Basic usage
+
+Compare the head of the development branch against the latest tag:
+
+```bash
+pyflexplot-test -v --num-procs=6 --data-path=/scratch-shared/meteoswiss/scratch/ruestefa/shared/test/pyflexplot/data
+```
+
+This will create two separate installs of pyflexplot in `pyflexplot-test/git/` and run each three times, once for each specified preset.
+Then the plots created by the two versions in `pyflexplot-test/work/` will be compared, and for those that are not identical, diff images will be produced in `pyflexplot-test/work/v0.13.11_vs_dev/`, on which the differences are highlighted.
+The default preset is `--preset=opr/*/all_png`.
+The default infiles in the presets are specified relative to a `./data/` directory.
+If this directory is not present, the path to it must be supplied with `--data-path`.
+
+### Advanced usage
+
 Example comparing the branch v0.14.0-pre against version v0.13.11:
 
 ```bash
-pyflexplot-test -v --force --num-procs=8 --work-dir=pyflexplot-test \
+pyflexplot-test --num-procs=6 \
   --old-ref=v0.13.11 --new-rev v0.14.0-pre \
   --preset=opr/cosmo-1e-ctrl/all_png --infile=data/cosmo-1e-ctrl/grid_conc_0924_20200301000000.nc \
   --preset=opr/ifs-hres-eu/all_png --infile=data/ifs-hres-eu/grid_conc_0998_20200818000000_goesgen_2spec.nc \
   --preset=opr/ifs-hres/all_png --infile=data/ifs-hres/grid_conc_1000_20200818000000_bushehr_2spec.nc
 ```
 
-This will create two separate installs of pyflexplot in `pyflexplot-test/git/` and run each three times, once for each specified preset.
-Then the plots created by the two versions in `pyflexplot-test/work/` will be compared, and for those that are not identical, diff images will be produced in `pyflexplot-test/work/v0.13.11_vs_v0.14.0-pre/`, on which the differences are highlighted.
-
 Note:
 
 - At the time of writing, v0.13.11 happened to be the latest version and would thus automatically have been picked as the old version had `--old-ref=v0.13.11` been omitted.
 - Parallelization (`--num-procs`) only applies to the individual pyflexplot runs.
   Pyflexplot-test itself always runs sequentially, i.e., one pyflexplot run after the other, only the runs themselves may be parallelized.
+- If the `pyflexplot-test` command is used repeatedly, use `-f` to reuse an existing work directory.
+  Just make sure not to accidentally delete anything in that directory by doing so.
 
 ## Credits
 
