@@ -80,7 +80,8 @@ def install_exe(clone_path: Path, cfg: RunConfig, exe: str = "pyflexplot") -> Pa
     bin_path = Path(venv_path).absolute() / "bin"
     if not (bin_path / "python").exists():
         raise Exception(f"installation of {exe} failed: no bin directory {bin_path}")
-    return bin_path
+    exe_path = bin_path / exe
+    return exe_path
 
 
 def zip_presets_infiles(plot_cfg):
@@ -154,19 +155,14 @@ def create_plots_preset(
     cmd_args += [f"--num-procs={plot_cfg.num_procs}"]
 
     # Perform dry-run to obtain the plots that will be produced
-    plots: List[str] = []
-    for line in run_cmd(cmd_args_dry, real_time=True):
-        try:
-            _, plot = line.split(" -> ")
-        except ValueError:
-            continue
-        else:
-            plots.append(plot)
+    n_plots = perform_dry_run(cmd_args_dry, cfg)
 
     # Perform actual run, using the number of plots to show progress
-    n_plots = len(plots)
+    if cfg.verbose:
+        print(f"current directory: {Path('.').absolute()}")
     print(f"create {n_plots} plots:")
     print(f"$ {' '.join(cmd_args)}")
+    plot_paths: List[Path] = []
     i_plot = 0
     for line in run_cmd(cmd_args, real_time=True):
         try:
@@ -179,19 +175,32 @@ def create_plots_preset(
             print(f"{prog} {line}")
         else:
             print(f"\r{prog} {i_plot}/{n_plots}", end="", flush=True)
+        plot_path = work_path / plot
+        plot_paths.append(plot_path)
     if not cfg.verbose:
         print()
 
-    # Check that plots have been created as expected
-    plot_paths: List[Path] = []
-    for plot in plots:
-        plot_path = work_path / plot
-        if not plot_path.exists():
-            print(f"warning: plot has not been created: {plot}")
-        else:
-            plot_paths.append(plot_path)
-
     return plot_paths
+
+
+def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> int:
+    """Perform a dry-run to obtain the number of plots to be created."""
+    if cfg.verbose:
+        print(
+            "perform dry run to identify plots to be created:\n$ "
+            + " ".join(cmd_args_dry)
+        )
+    n_plots = 0
+    for line in run_cmd(cmd_args_dry, real_time=True):
+        try:
+            _, _ = line.split(" -> ")
+        except ValueError:
+            continue
+        else:
+            n_plots += 1
+    if cfg.verbose:
+        print(f"expecting {n_plots} to be created")
+    return n_plots
 
 
 @dataclass

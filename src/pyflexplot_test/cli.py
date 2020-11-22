@@ -10,6 +10,7 @@ from typing import Tuple
 
 # Third-party
 import click
+from click import Context
 
 # Local
 from . import __version__
@@ -21,7 +22,7 @@ from .main import create_plots
 from .main import install_exe
 from .main import PlotPairSequence
 from .main import prepare_clone
-from .main import prepare_work_path
+from .main import prepare_work_path as _prepare_work_path_core
 from .utils import git_get_remote_tags
 from .utils import tmp_path
 
@@ -35,7 +36,7 @@ class PathlibPath(click.ParamType):
         return Path(value)
 
 
-def check_for_active_venv(ctx: click.Context) -> None:
+def check_for_active_venv(ctx: Context) -> None:
     """Abort if an active virtual environment is detected."""
     venv = os.getenv("VIRTUAL_ENV")
     if not venv:
@@ -46,9 +47,7 @@ def check_for_active_venv(ctx: click.Context) -> None:
     ctx.exit(1)
 
 
-def check_infiles(
-    ctx: click.Context, infiles: Sequence[str], presets: Sequence[str]
-) -> None:
+def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) -> None:
     n_in = len(infiles)
     n_pre = len(presets)
     if n_in > n_pre:
@@ -151,7 +150,7 @@ def check_infiles(
 # pylint: disable=R0913  # too-many-arguments (>5)
 # pylint: disable=R0914  # too-many-locals (>15)
 def cli(
-    ctx: click.Context,
+    ctx: Context,
     data_path: Optional[Path],
     infiles: Tuple[str, ...],
     num_procs: int,
@@ -205,20 +204,28 @@ def cli(
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
 
-    work_dir_path = work_dir_path / "work"
+    old_clones_path = clones_path / old_rev
+    new_clones_path = clones_path / new_rev
 
-    diff_dir_path = work_dir_path / f"{old_rev}_vs_{new_rev}"
-    diff_dir_path.mkdir(parents=True, exist_ok=True)
+    old_work_path = work_dir_path / "work" / old_rev
+    new_work_path = work_dir_path / "work" / new_rev
+
+    diffs_path = work_dir_path / "work" / f"{old_rev}_vs_{new_rev}"
+    diffs_path.mkdir(parents=True, exist_ok=True)
+
+    prepare_work_path(ctx, "old work dir", old_work_path, cfg)
+    prepare_work_path(ctx, "new work dir", new_work_path, cfg)
+    prepare_work_path(ctx, "diffs dir", diffs_path, cfg)
 
     old_repo_cfg = RepoConfig(
         rev=old_rev,
-        clone_path=clones_path / old_rev,
-        work_path=work_dir_path / old_rev,
+        clone_path=old_clones_path,
+        work_path=old_work_path,
     )
     new_repo_cfg = RepoConfig(
         rev=new_rev,
-        clone_path=clones_path / new_rev,
-        work_path=work_dir_path / new_rev,
+        clone_path=new_clones_path,
+        work_path=new_work_path,
     )
     plot_cfg = PlotConfig(
         presets=presets,
@@ -243,11 +250,11 @@ def cli(
     )
 
     # Compare plots
-    diff_plot_paths = plot_pairs.compare(diff_dir_path, cfg)
+    diff_plot_paths = plot_pairs.compare(diffs_path, cfg)
     if diff_plot_paths:
         print(
             f"created {len(diff_plot_paths)} diff plots in "
-            f"{diff_dir_path.relative_to(start_path)}"
+            f"{diffs_path.relative_to(start_path)}"
         )
         if cfg.verbose:
             print("\n".join([str(p.relative_to(start_path)) for p in diff_plot_paths]))
@@ -255,14 +262,13 @@ def cli(
 
 # pylint: disable=R0913  # too-many-arguments (>5)
 def create_clone_and_plots(
-    ctx: click.Context,
+    ctx: Context,
     repo_path: str,
     case: str,
     repo_cfg: RepoConfig,
     plot_cfg: PlotConfig,
     cfg: RunConfig,
 ) -> List[Path]:
-
     # Create clone of repository
     print(f"prepare {case} clone: {repo_path}@{repo_cfg.rev} -> {repo_cfg.clone_path}")
     try:
@@ -276,22 +282,23 @@ def create_clone_and_plots(
         ctx.exit(1)
 
     # Install pyflexplot into virtual env
-    exe_name = "pyflexplot"
-    print(f"prepare {case} {exe_name} executable in {repo_cfg.clone_path}")
-    bin_path = install_exe(repo_cfg.clone_path, cfg)
-    exe_path = bin_path / exe_name
+    print(f"prepare {case} executable in {repo_cfg.clone_path}")
+    exe_path = install_exe(repo_cfg.clone_path, cfg)
 
     # Create plots
     print(f"create {case} plots with {exe_path} in {repo_cfg.work_path}")
+    plot_paths = create_plots(exe_path, repo_cfg.work_path, plot_cfg, cfg)
+
+    return plot_paths
+
+
+def prepare_work_path(ctx: Context, name: str, path: Path, cfg: RunConfig) -> None:
     try:
-        prepare_work_path(repo_cfg.work_path, cfg)
+        _prepare_work_path_core(path, cfg)
     except PathExistsError as e:
         click.echo(
-            f"error: preparing {case} clone failed because '{e}' already exists"
+            f"error: preparing {name} failed because '{e}' already exists"
             "; use -f or --force to overwrite",
             file=sys.stderr,
         )
         ctx.exit(1)
-    plot_paths = create_plots(exe_path, repo_cfg.work_path, plot_cfg, cfg)
-
-    return plot_paths
