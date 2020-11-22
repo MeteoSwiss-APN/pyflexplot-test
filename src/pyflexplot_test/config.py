@@ -9,7 +9,11 @@ from typing import Sequence
 @dataclass
 class RunConfig:
     force: bool
-    verbose: bool
+    verbosity: int
+
+    def __post_init__(self) -> None:
+        self.verbose: bool = self.verbosity > 0
+        self.debug: bool = self.verbosity > 1
 
 
 @dataclass

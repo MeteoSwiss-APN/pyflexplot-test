@@ -164,7 +164,9 @@ def create_plots_preset(
     print(f"$ {' '.join(cmd_args)}")
     plot_paths: List[Path] = []
     i_plot = 0
-    for line in run_cmd(cmd_args, real_time=True):
+    for i_line, line in enumerate(run_cmd(cmd_args, real_time=True)):
+        if cfg.debug:
+            print(f"({i_line}) {line}")
         try:
             _, plot = line.split(" -> ")
         except ValueError:

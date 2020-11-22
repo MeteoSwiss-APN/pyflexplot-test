@@ -138,7 +138,12 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     default="pyflexplot-test",
     type=PathlibPath(),
 )
-@click.option("-v", "verbose", help="verbose output", is_flag=True, default=False)
+@click.option(
+    "-v",
+    "verbosity",
+    help="increase verbosity",
+    count=True,
+)
 @click.version_option(
     __version__,
     "--version",
