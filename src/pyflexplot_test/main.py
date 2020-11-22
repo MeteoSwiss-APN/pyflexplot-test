@@ -141,18 +141,20 @@ def create_plots_preset(
             data_path.unlink()
         Path("data").symlink_to(plot_cfg.data_path)
 
-    cmd_args = [str(exe_path)]
-    cmd_args.append(f"--num-procs={plot_cfg.num_procs}")
-    cmd_args.append(f"--preset={preset}")
+    cmd_args = [
+        str(exe_path),
+        "--no-show-version",
+        f"--num-procs={plot_cfg.num_procs}",
+        f"--preset={preset}",
+    ]
     if infile:
         cmd_args.append(f"--setup infile {infile}")
     if plot_cfg.only:
         cmd_args.append(f"--only={plot_cfg.only}")
 
     # Perform dry-run to obtain the plots that will be produced
-    cmd_args_dry = cmd_args + ["--dry-run"]
     plots: List[str] = []
-    for line in run_cmd(cmd_args_dry, real_time=True):
+    for line in run_cmd(cmd_args + ["--dry-run"], real_time=True):
         try:
             _, plot = line.split(" -> ")
         except ValueError:
