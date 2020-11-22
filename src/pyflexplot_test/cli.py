@@ -24,7 +24,6 @@ from .main import PlotPairSequence
 from .main import prepare_clone
 from .main import prepare_work_path as _prepare_work_path_core
 from .utils import git_get_remote_tags
-from .utils import tmp_path
 
 
 class PathlibPath(click.ParamType):
@@ -136,7 +135,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     "--work-dir",
     "work_dir_path",
     help="working directory",
-    default=tmp_path("pyflexplot-new-"),
+    default="pyflexplot-test",
     type=PathlibPath(),
 )
 @click.option("-v", "verbose", help="verbose output", is_flag=True, default=False)
