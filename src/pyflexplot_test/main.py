@@ -5,6 +5,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Sequence
@@ -17,6 +18,7 @@ from git.exc import InvalidGitRepositoryError
 from .config import PlotConfig
 from .config import RunConfig
 from .exceptions import PathExistsError
+from .utils import check_paths_equiv
 from .utils import run_cmd
 
 
@@ -72,7 +74,7 @@ def install_exe(clone_path: Path, cfg: RunConfig, exe: str = "pyflexplot") -> Pa
         raise Exception(f"missing Makefile in {os.path.abspath(os.curdir)}")
     venv_path = "venv"
     cmd_args = ["make", "install", "CHAIN=1", f"VENV_DIR={venv_path}"]
-    for line in run_cmd(cmd_args):
+    for line in run_cmd(cmd_args, real_time=True):
         if cfg.verbose:
             print(line)
     bin_path = Path(venv_path).absolute() / "bin"
@@ -150,7 +152,7 @@ def create_plots_preset(
     # Perform dry-run to obtain the plots that will be produced
     cmd_args_dry = cmd_args + ["--dry-run"]
     plots: List[str] = []
-    for line in run_cmd(cmd_args_dry):
+    for line in run_cmd(cmd_args_dry, real_time=True):
         try:
             _, plot = line.split(" -> ")
         except ValueError:
@@ -163,7 +165,7 @@ def create_plots_preset(
     print(f"create {n_plots} plots:")
     print(f"$ {' '.join(cmd_args)}")
     i_plot = 0
-    for line in run_cmd(cmd_args):
+    for line in run_cmd(cmd_args, real_time=True):
         try:
             _, plot = line.split(" -> ")
         except ValueError:
@@ -206,27 +208,70 @@ class PlotPair:
             )
         self.shared_path: Path = shared1
 
-    def compare(self, cfg: RunConfig) -> Optional[Path]:
-        if filecmp.cmp(self.path1, self.path2):
-            if cfg.verbose:
-                print(f"plots are identical: {self.shared_path}")
-            return None
+    def compare(self, diffs_path: Path, cfg: RunConfig) -> Optional[Path]:
         if cfg.verbose:
-            print(f"plots differ: {self.shared_path}")
-        cmd_args = []
+            print(f"comparing pair {self.shared_path}")
+        if filecmp.cmp(self.path1, self.path2):
+            print(f"identical: {self.shared_path}")
+            return None
+        print(f"differing: {self.shared_path}")
+        diff_path = diffs_path / self.shared_path
+        cmd_args = ["compare", str(self.path1), str(self.path2), str(diff_path)]
+        if cfg.verbose:
+            print("creating diff plot:\n$ " + " \\\n    ".join(cmd_args))
+        run_cmd(cmd_args)
+        return diff_path
 
 
-def compare_plots(
-    pairs: Sequence[PlotPair],
-    diff_dir_path: Path,
-    cfg: RunConfig,
-) -> List[Path]:
-    if cfg.verbose:
-        print()
-    print(f"compare {len(pairs)} pairs of plots:")
-    diff_paths: List[Path] = []
-    for pair in pairs:
-        diff_path = pair.compare(cfg)
-        if diff_path is not None:
-            diff_paths.append(diff_path)
-    return diff_paths
+class PlotPairSequence:
+    """A sequence of ``PlotPair`` instances."""
+
+    def __init__(
+        self,
+        paths1: Sequence[Path],
+        paths2: Sequence[Path],
+        base1: Optional[Path],
+        base2: Optional[Path],
+        sort: bool = True,
+    ) -> None:
+        """Create an instance of ``PlotPair``."""
+        paths1 = list(paths1)
+        paths2 = list(paths2)
+        check_paths_equiv(
+            paths1=paths1,
+            paths2=paths2,
+            base1=base1,
+            base2=base2,
+            sort_rel=sort,
+            action="warn",
+            del_missing=True,
+        )
+        self.pairs: List[PlotPair] = [
+            PlotPair(path1=old_path, path2=new_path, base1=base1, base2=base2)
+            for old_path, new_path in zip(paths1, paths2)
+        ]
+
+    def compare(self, diffs_path: Path, cfg: RunConfig) -> List[Path]:
+        """Compare the pairs of plots.
+
+        For pairs that differ, diff plots showing the differences are created.
+
+        Args:
+            diffs_path: Path where diff plots are saved.
+
+            cfg: Run configuration.
+
+        """
+        print(f"comparing {len(self)} pairs of plots")
+        diff_paths: List[Path] = []
+        for pair in self:
+            diff_path = pair.compare(diffs_path, cfg)
+            if diff_path is not None:
+                diff_paths.append(diff_path)
+        return diff_paths
+
+    def __iter__(self) -> Iterator[PlotPair]:
+        return iter(self.pairs)
+
+    def __len__(self) -> int:
+        return len(self.pairs)

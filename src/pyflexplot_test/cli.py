@@ -17,13 +17,11 @@ from .config import PlotConfig
 from .config import RepoConfig
 from .config import RunConfig
 from .exceptions import PathExistsError
-from .main import compare_plots
 from .main import create_plots
 from .main import install_exe
-from .main import PlotPair
+from .main import PlotPairSequence
 from .main import prepare_clone
 from .main import prepare_work_path
-from .utils import check_paths_equiv
 from .utils import git_get_remote_tags
 from .utils import tmp_path
 
@@ -170,6 +168,7 @@ def cli(
     check_for_active_venv(ctx)
     check_infiles(ctx, infiles, presets)
 
+    start_path = Path(".").absolute()
     if data_path:
         data_path = data_path.absolute()
 
@@ -197,15 +196,20 @@ def cli(
             print(f"obtain old_rev from repo: {repo_path}")
         tags = git_get_remote_tags(repo_path)
         if cfg.verbose:
-            print(f"select most recent of {len(tags)} tags ({', '.join(tags)})")
+            sel_tags = tags if len(tags) <= 7 else tags[:3] + ["..."] + tags[-3:]
+            print(f"select most recent of {len(tags)} tags ({', '.join(sel_tags)})")
         old_rev = tags[-1]
         if cfg.verbose:
             print(f"old_rev: {old_rev}")
 
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
+
     work_dir_path = work_dir_path / "work"
+
     diff_dir_path = work_dir_path / f"{old_rev}_vs_{new_rev}"
+    diff_dir_path.mkdir(parents=True, exist_ok=True)
+
     old_repo_cfg = RepoConfig(
         rev=old_rev,
         clone_path=clones_path / old_rev,
@@ -231,27 +235,22 @@ def cli(
     new_plot_paths = create_clone_and_plots(
         ctx, repo_path, "new", new_repo_cfg, plot_cfg, cfg
     )
-    check_paths_equiv(
+    plot_pairs = PlotPairSequence(
         paths1=old_plot_paths,
         paths2=new_plot_paths,
         base1=old_repo_cfg.work_path,
         base2=new_repo_cfg.work_path,
-        sort_rel=True,
-        action="warn",
-        del_missing=True,
     )
-    plot_pairs = [
-        PlotPair(
-            path1=old_path,
-            path2=new_path,
-            base1=old_repo_cfg.work_path,
-            base2=new_repo_cfg.work_path,
-        )
-        for old_path, new_path in zip(old_plot_paths, new_plot_paths)
-    ]
 
     # Compare plots
-    diff_plot_paths = compare_plots(plot_pairs, diff_dir_path, cfg)
+    diff_plot_paths = plot_pairs.compare(diff_dir_path, cfg)
+    if diff_plot_paths:
+        print(
+            f"created {len(diff_plot_paths)} diff plots in "
+            f"{diff_dir_path.relative_to(start_path)}"
+        )
+        if cfg.verbose:
+            print("\n".join([str(p.relative_to(start_path)) for p in diff_plot_paths]))
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)

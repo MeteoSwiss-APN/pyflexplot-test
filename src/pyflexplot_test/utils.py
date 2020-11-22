@@ -6,7 +6,9 @@ import time
 from pathlib import Path
 from typing import Iterator
 from typing import List
+from typing import Literal
 from typing import Optional
+from typing import overload
 from typing import Sequence
 
 
@@ -18,30 +20,72 @@ def tmp_path(base: str, _time_stamp: List[int] = []) -> str:
     return f"{base}{_time_stamp[0]}"
 
 
-def run_cmd(args: Sequence[str]) -> Iterator[str]:
-    """Run a command and yield the standard output line by line."""
+@overload
+def run_cmd(args: Sequence[str], real_time: Literal[False] = False) -> List[str]:
+    ...
+
+
+@overload
+def run_cmd(args: Sequence[str], real_time: Literal[True]) -> Iterator[str]:
+    ...
+
+
+def run_cmd(args: Sequence[str], real_time: bool = False):
+    """Run a command and yield the standard output line by line.
+
+    By default, the standard output is collected and returned after the command
+    has finished. Alternatively, the option ``real_time`` enables access to the
+    standard by returning an iterator, which however must be iterated over,
+    otherwise the subprocess is silently skipped.
+
+    Args:
+        args: Arguments passed to the subprocess.
+
+        real_time (optional): Yield standard output line by line in real time
+            instead of returning them together in the end.
+
+    Returns:
+        List of lines of standard output if ``real_time`` is false.
+
+        Iterator over lines of standard output is ``real_time`` is true.
+
+    """
+
+    def raise_if_err(returncode: int, stderr: List[str]) -> None:
+        if returncode:
+            raise Exception(
+                f"error ({returncode}) running command '{' '.join(args)}':\n"
+                + "\n".join(stderr)
+            )
+
+    def _run_cmd_real_time(proc: subprocess.Popen) -> Iterator[str]:
+        assert proc.stdout is not None  # mypy
+        with proc.stdout:
+            for raw_line in iter(proc.stdout.readline, b""):
+                line = raw_line.decode("utf-8").strip()
+                yield line
+        proc.wait()
+        assert proc.stderr is not None  # mypy
+        stderr = [raw_line.decode("utf-8") for raw_line in proc.stderr]
+        raise_if_err(proc.returncode, stderr)
+
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert proc.stdout is not None  # mypy
-    with proc.stdout:
-        for raw_line in iter(proc.stdout.readline, b""):
-            line = raw_line.decode("utf-8").strip()
-            yield line
-    proc.wait()
-    assert proc.stderr is not None  # mypy
-    stderr = [line.decode("utf-8") for line in iter(proc.stderr.readline, b"")]
-    # stdout, stderr = proc.communicate()
-    if proc.returncode:
-        raise Exception(
-            f"error ({proc.returncode}) running command '{' '.join(args)}':\n"
-            + "\n".join(stderr)
-        )
+    if real_time:
+        return _run_cmd_real_time(proc)
+    raw_stdout, raw_stderr = proc.communicate()
+    stdout = list(map(str.strip, raw_stdout.decode("utf-8").split("\n")))
+    stderr = list(map(str.strip, raw_stderr.decode("utf-8").split("\n")))
+    if stderr == [""]:
+        stderr = []
+    raise_if_err(int(bool(stderr)), stderr)
+    return stdout
 
 
 def git_get_remote_tags(repo: str) -> List[str]:
     """Get tags from remote git repository, sorted as version numbers."""
     cmd_args = ["git", "ls-remote", "--tags", "--sort=version:refname", repo]
     tags: List[str] = []
-    for line in run_cmd(cmd_args):
+    for line in run_cmd(cmd_args, real_time=True):
         try:
             # Format: "<hash>\t<refs/tags/tag>"
             _, tag = line.split("\trefs/tags/")
@@ -54,6 +98,7 @@ def git_get_remote_tags(repo: str) -> List[str]:
     return tags
 
 
+# pylint: disable=R0913  # too-many-arguments (>5)
 def check_paths_equiv(
     paths1: List[Path],
     paths2: List[Path],
@@ -98,6 +143,7 @@ def check_paths_equiv(
             return list(paths)
         return [path.relative_to(base) for path in paths]
 
+    # pylint: disable=R0913  # too-many-arguments (>5)
     def run(
         name1: str,
         paths1: List[Path],
