@@ -6,10 +6,12 @@ import time
 from pathlib import Path
 from typing import Iterator
 from typing import List
-from typing import Literal
 from typing import Optional
 from typing import overload
 from typing import Sequence
+
+# Third-party
+from typing_extensions import Literal
 
 
 # pylint: disable=W0102  # dangerous-default-value

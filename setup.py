@@ -53,6 +53,7 @@ python = ">= 3.7"
 requirements = [
     "click >= 7.1",
     "gitpython >= 3.1",
+    "typing_extensions",
 ]
 
 scripts = [
