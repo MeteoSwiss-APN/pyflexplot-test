@@ -140,6 +140,8 @@ def create_plots_preset(
             if not data_path.is_symlink():
                 raise Exception(f"{data_path.absolute()} exists and is not a symlink")
             data_path.unlink()
+        if not plot_cfg.data_path.exists():
+            raise Exception(f"data path not found: {plot_cfg.data_path}")
         Path("data").symlink_to(plot_cfg.data_path)
 
     cmd_args = [
