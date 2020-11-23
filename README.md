@@ -11,34 +11,32 @@ Compare the plots created by two versions of pyflexplot.
 
 ## Installation
 
-There are dfferent ways how to install the project:
+There are dfferent ways how to install the project.
 
-- With pipx:
+### With pipx
 
-  ```bash
-  pipx install git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
+```bash
+pipx install git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
+```
+
+### Manually
+
+```bash
+git clone git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
+cd pyflexplot-test
+venv_dir=~/local/venvs/pyflexplot-test
+make install VENV_DIR=${venv_dir} CHAIN=1
+${venv_dir}/bin/pyflexplot-test --help
   ```
 
-- Manually:
+### With pip
 
-  ```bash
-  git clone git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
-  cd pyflexplot-test
-  venv_dir=~/local/venvs/pyflexplot-test
-  make install VENV_DIR=${venv_dir} CHAIN=1
-  ${venv_dir}/bin/pyflexplot-test --help
-  ```
-
-- With pip:
-
-  ```bash
-  venv_dir=~/local/venvs/pyflexplot-test
-  python -m venv ${venv_dir}
-  ${venv}/bin/python -m pip install git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
-  ${venv_dir}/bin/pyflexplot-test --help
-  ```
-
-- ...
+```bash
+venv_dir=~/local/venvs/pyflexplot-test
+python -m venv ${venv_dir}
+${venv}/bin/python -m pip install git+ssh://git@github.com/MeteoSwiss-APN/pyflexplot-test
+${venv_dir}/bin/pyflexplot-test --help
+```
 
 ## Usage
 
@@ -98,7 +96,7 @@ Example comparing the branch v0.14.0-pre against version v0.13.11:
 
 ```bash
 pyflexplot-test --num-procs=6 \
-  --old-ref=v0.13.11 --new-rev v0.14.0-pre \
+  --old-rev=v0.13.11 --new-rev v0.14.0-pre \
   --preset=opr/cosmo-1e-ctrl/all_png --infile=data/cosmo-1e-ctrl/grid_conc_0924_20200301000000.nc \
   --preset=opr/ifs-hres-eu/all_png --infile=data/ifs-hres-eu/grid_conc_0998_20200818000000_goesgen_2spec.nc \
   --preset=opr/ifs-hres/all_png --infile=data/ifs-hres/grid_conc_1000_20200818000000_bushehr_2spec.nc
