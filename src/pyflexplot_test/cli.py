@@ -70,7 +70,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     "--data-path",
     help="path to data directory",
     type=PathlibPath(),
-    default=None,
+    default="data",
 )
 @click.option(
     "-f",
@@ -155,7 +155,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
 # pylint: disable=R0914  # too-many-locals (>15)
 def cli(
     ctx: Context,
-    data_path: Optional[Path],
+    data_path: Path,
     infiles: Tuple[str, ...],
     num_procs: int,
     only: Optional[int],
@@ -172,8 +172,7 @@ def cli(
     check_infiles(ctx, infiles, presets)
 
     start_path = Path(".").absolute()
-    if data_path:
-        data_path = data_path.absolute()
+    data_path = data_path.absolute()
 
     for preset in presets:
         if preset.endswith("_pdf"):
