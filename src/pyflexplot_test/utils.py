@@ -55,7 +55,7 @@ def run_cmd(args: Sequence[str], real_time: bool = False):
 
     def raise_if_err(returncode: int, stderr: List[str]) -> None:
         if returncode:
-            raise Exception(
+            raise RuntimeError(
                 f"error ({returncode}) running command '{' '.join(args)}':\n"
                 + "\n".join(stderr)
             )

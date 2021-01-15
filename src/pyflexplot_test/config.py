@@ -1,29 +1,29 @@
 """Configuration classes."""
 # Standard library
-from dataclasses import dataclass
+import dataclasses as dc
 from pathlib import Path
 from typing import Optional
 from typing import Sequence
 
 
-@dataclass
+@dc.dataclass
 class RunConfig:
-    force: bool
-    verbosity: int
+    force: bool = False
+    verbosity: int = 0
 
     def __post_init__(self) -> None:
         self.verbose: bool = self.verbosity > 0
         self.debug: bool = self.verbosity > 1
 
 
-@dataclass
+@dc.dataclass
 class RepoConfig:
     clone_path: Path
     rev: str
     work_path: Path
 
 
-@dataclass
+@dc.dataclass
 class PlotConfig:
     presets: Sequence[str]
     infiles: Sequence[str]

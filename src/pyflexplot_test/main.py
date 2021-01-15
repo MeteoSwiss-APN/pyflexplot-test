@@ -3,12 +3,14 @@
 import filecmp
 import os
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
+from subprocess import PIPE
+from subprocess import Popen
 from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Sequence
+from typing import Union
 
 # Third-party
 from git import Repo
@@ -207,16 +209,37 @@ def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> int:
     return n_plots
 
 
-@dataclass
 class PlotPair:
-    path1: Path
-    path2: Path
-    base1: Optional[Path]
-    base2: Optional[Path]
+    def __init__(
+        self,
+        path1: Union[Path, str],
+        path2: Union[Path, str],
+        base1: Optional[Union[Path, str]] = None,
+        base2: Optional[Union[Path, str]] = None,
+    ) -> None:
+        """Create an instance of ``PlotPair``.
 
-    def __post_init__(self) -> None:
-        shared1 = self.path1.relative_to(self.base1) if self.base1 else self.path1
-        shared2 = self.path2.relative_to(self.base2) if self.base2 else self.path2
+        The two plots must have the same file name but are located in different
+        directories, which are part of the paths but may also be specified
+        explicitly (or have to; now sure; needs cleanup).
+
+        Args:
+            path1: Path to first plot; file name must be the same as ``path2``.
+
+            path2: Path to second plot; file name must be the same as ``path1``.
+
+            base1 (optional): Base directory of ``path``; equal to the base name
+                of ``path1`` unless the plot files are located in equal sub-
+                directories, e.g., path1='<base1>/foo/bar/baz.png` and
+                path2=`<base2>/foo/bar/baz.png`.
+
+            base2 (optional): Like ``base1`` but for ``path2``.
+
+        """
+        self.path1: Path = Path(path1)
+        self.path2: Path = Path(path2)
+        shared1 = self.path1.relative_to(base1) if base1 else self.path1
+        shared2 = self.path2.relative_to(base2) if base2 else self.path2
         if shared1 != shared2:
             raise ValueError(
                 "inconsistent paths and bases; shared path components differ:"
@@ -224,19 +247,91 @@ class PlotPair:
             )
         self.shared_path: Path = shared1
 
-    def compare(self, diffs_path: Path, cfg: RunConfig) -> Optional[Path]:
+    def compare(
+        self,
+        diffs_path: Optional[Union[Path, str]] = None,
+        cfg: RunConfig = RunConfig(),
+    ) -> Optional[Path]:
         if cfg.verbose:
             print(f"comparing pair {self.shared_path}")
         if filecmp.cmp(self.path1, self.path2):
             print(f"identical: {self.shared_path}")
             return None
         print(f"differing: {self.shared_path}")
-        diff_path = diffs_path / self.shared_path
+        diff_path = self.shared_path
+        if diffs_path:
+            diff_path = Path(diffs_path) / diff_path
+        if self._equal_sized():
+            self._compare_equal_sized(diff_path, cfg)
+        else:
+            self._compare_unequal_sized(diff_path, cfg)
+        return diff_path
+
+    def _compare_equal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
         cmd_args = ["compare", str(self.path1), str(self.path2), str(diff_path)]
         if cfg.verbose:
             print("creating diff plot:\n$ " + " \\\n    ".join(cmd_args))
         run_cmd(cmd_args)
-        return diff_path
+
+    def _compare_unequal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
+        width = max(
+            int(self._identify(self.path1, format="%[w]", trim=True)),
+            int(self._identify(self.path2, format="%[w]", trim=True)),
+        )
+        height = max(
+            int(self._identify(self.path1, format="%[h]", trim=True)),
+            int(self._identify(self.path2, format="%[h]", trim=True)),
+        )
+        size = f"{width}x{height}"
+        args_prep = (
+            f"-trim -resize {size} -background white -gravity north-west -extent {size}"
+            f" -bordercolor white -border 10"
+        )
+        args_path1 = f"( {args_prep} {str(self.path1)} )"
+        args_path2 = f"( {args_prep} {str(self.path2)} )"
+        cmd_prep = f"convert {args_path1} {args_path2} miff:-"
+        cmd_comp = f"compare miff:- {diff_path}"
+        cmd = " | ".join([cmd_prep, cmd_comp])
+        print(f"creating diff plot:\n$ {cmd}")
+        _, stderr = Popen(
+            cmd_comp.split(),
+            stdin=Popen(cmd_prep.split(), stdout=PIPE).stdout,
+            stdout=PIPE,
+        ).communicate()
+        if stderr:
+            raise RuntimeError(
+                f"error running command '{cmd}':\n{stderr.decode('ascii')}"
+            )
+
+    def _equal_sized(self) -> bool:
+        """Determine whether the images are of equal size."""
+        size1 = self._identify(self.path1, format="%[w]x%[h]")
+        size2 = self._identify(self.path2, format="%[w]x%[h]")
+        return size1 == size2
+
+    @staticmethod
+    def _identify(path: Path, format: Optional[str] = None, trim: bool = False) -> str:
+        """Run IM's identify for ``path``."""
+        cmd_idfy = "identify"
+        if format is not None:
+            cmd_idfy += f" -format {format}"
+        if not trim:
+            cmd_idfy += f" {path}"
+            stdout, _ = Popen(cmd_idfy.split(), stdout=PIPE).communicate()
+        else:
+            cmd_idfy += " miff:-"
+            cmd_trim = f"convert -trim {path} miff:-"
+            cmd = " | ".join([cmd_trim, cmd_idfy])
+            stdout, stderr = Popen(
+                cmd_idfy.split(),
+                stdin=Popen(cmd_trim.split(), stdout=PIPE).stdout,
+                stdout=PIPE,
+            ).communicate()
+            if stderr:
+                raise RuntimeError(
+                    f"error running command '{cmd}':\n{stderr.decode('ascii')}"
+                )
+        return stdout.decode("ascii")
 
 
 class PlotPairSequence:
