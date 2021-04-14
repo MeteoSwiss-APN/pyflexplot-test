@@ -11,9 +11,13 @@ class RunConfig:
     force: bool = False
     verbosity: int = 0
 
-    def __post_init__(self) -> None:
-        self.verbose: bool = self.verbosity > 0
-        self.debug: bool = self.verbosity > 1
+    @property
+    def verbose(self) -> bool:
+        return self.verbosity > 0
+
+    @property
+    def debug(self) -> bool:
+        return self.verbosity > 1
 
 
 @dc.dataclass
