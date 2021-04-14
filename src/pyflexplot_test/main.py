@@ -2,6 +2,7 @@
 # Standard library
 import filecmp
 import os
+import re
 import shutil
 from pathlib import Path
 from subprocess import PIPE
@@ -17,72 +18,113 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError
 
 # Local
+from .config import CloneConfig
 from .config import PlotConfig
 from .config import RunConfig
+from .config import WorkDirConfig
 from .exceptions import PathExistsError
 from .utils import check_paths_equiv
 from .utils import run_cmd
 
 
-def prepare_clone(repo: str, clone_path: Path, rev: str, cfg: RunConfig) -> Repo:
+def prepare_clone(repo: str, clone_cfg: CloneConfig, cfg: RunConfig) -> Repo:
     """Prepare a local clone of a remote git repository."""
-    if cfg.verbose:
-        print(f"prepare clone dir: {clone_path}")
+    _name_ = "main.prepare_clone"
+    clone_path = clone_cfg.path
+    if cfg.debug:
+        print(f"{_name_}: prepare clone at {clone_path}")
     clone: Optional[Repo] = None
     if clone_path.exists():
-        clone = prepare_existing_clone(repo, clone_path, cfg)
+        clone = handle_existing_clone(repo, clone_cfg, cfg)
+        if clone_cfg.reuse and clone is not None:
+            if cfg.debug:
+                print(f"{_name_}: reuse existing clone at {clone_path}")
+            return clone
     if clone is None:
-        if cfg.verbose:
-            print(f"clone fresh repo {repo} to {clone_path}")
+        if cfg.debug:
+            print(f"{_name_}: clone fresh repo {repo} to {clone_path}")
         clone_path.mkdir(parents=True, exist_ok=True)
         clone = Repo.clone_from(repo, clone_path)
     assert clone is not None  # mypy
-    if cfg.verbose:
-        print(f"check out rev: {rev}")
+    if cfg.debug:
+        print(f"{_name_}: check out rev: {clone_cfg.rev}")
     clone.git.fetch(all=True)
-    clone.git.checkout(rev)
+    clone.git.checkout(clone_cfg.rev)
     if not clone.head.is_detached:
         clone.git.pull()
     return clone
 
 
-def prepare_existing_clone(
-    repo: str, clone_path: Path, cfg: RunConfig
+def handle_existing_clone(
+    repo: str, clone_cfg: CloneConfig, cfg: RunConfig
 ) -> Optional[Repo]:
+    """Check if existing clone can be reused, and if not, remove it."""
+    _name_ = "main.handle_existing_clone"
     try:
-        clone = Repo(clone_path)
+        clone = Repo(clone_cfg.path)
     except InvalidGitRepositoryError:
-        pass
+        if cfg.debug:
+            print(
+                f"{_name_}: existing directory at clone path {clone_cfg.path} is not a"
+                " git repo"
+            )
     else:
         # Check whether the repo is our target repo based on the origin url
         # Note that this check will fail if, e.g., one link is ssh and the
         # other https although the repo is the same
-        if clone.remote().url == repo:
-            if not clone.is_dirty():
-                if cfg.verbose:
-                    print(f"use existing clone: {clone_path}")
-                return clone
-    if not clone_path.is_dir() or any(clone_path.iterdir()):
+        if clone.remote().url != repo:
+            if cfg.debug:
+                print(
+                    f"{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
+                    f" remote URL doesn't match: {clone.remote().url} != {repo}"
+                )
+        elif clone.is_dirty():
+            if cfg.debug:
+                print(
+                    f"{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
+                    "it's dirty"
+                )
+        elif clone_cfg.reuse:
+            if cfg.debug:
+                print(f"{_name_}: reuse existing clone at {clone_cfg.path}")
+            return clone
+        else:
+            if cfg.debug:
+                print(
+                    f"{_name_}: could reuse existing clone at {clone_cfg.path}, but"
+                    " won't because --reuse-installs or similar has not been passed"
+                )
+    is_file_or_not_empty = not clone_cfg.path.is_dir() or any(clone_cfg.path.iterdir())
+    if is_file_or_not_empty:
         if not cfg.force:
-            raise PathExistsError(clone_path)
-        shutil.rmtree(clone_path)
+            if cfg.debug:
+                print(f"{_name_} cannot reuse existing clone at {clone_cfg.path}")
+            raise PathExistsError(clone_cfg.path)
+        if cfg.debug:
+            print(f"{_name_}: remove existing clone at {clone_cfg.path}")
+        shutil.rmtree(clone_cfg.path)
     return None
 
 
-def install_exe(clone_path: Path, cfg: RunConfig, exe: str = "pyflexplot") -> Path:
+def install_exe(
+    clone_path: Path, reuse: bool, cfg: RunConfig, exe: str = "pyflexplot"
+) -> Path:
     """Install pyflexplot into a virtual env and return the executable path."""
     os.chdir(clone_path)
     if not Path("Makefile").exists():
         raise Exception(f"missing Makefile in {os.path.abspath(os.curdir)}")
     venv_path = "venv"
+    bin_path = Path(venv_path).absolute() / "bin"
+    exe_path = bin_path / exe
+    if reuse and exe_path.exists():
+        print(f"reuse existing executable {exe_path}")
+        return exe_path
     cmd_args = ["make", "install", "CHAIN=1", f"VENV_DIR={venv_path}"]
     for line in run_cmd(cmd_args, real_time=True):
         if cfg.verbose:
             print(line)
-    bin_path = Path(venv_path).absolute() / "bin"
     if not (bin_path / "python").exists():
         raise Exception(f"installation of {exe} failed: no bin directory {bin_path}")
-    exe_path = bin_path / exe
     return exe_path
 
 
@@ -103,12 +145,25 @@ def zip_presets_infiles(plot_cfg):
     return zip(plot_cfg.presets, infiles)
 
 
-def prepare_work_path(work_path: Path, cfg: RunConfig) -> None:
-    if work_path.exists() and any(work_path.iterdir()):
-        if not cfg.force:
-            raise PathExistsError(work_path)
-        shutil.rmtree(work_path)
-    work_path.mkdir(parents=True, exist_ok=True)
+def prepare_work_path(wdir_cfg: WorkDirConfig, cfg: RunConfig) -> None:
+    _name_ = "main.prepare_work_path"
+    path = wdir_cfg.path
+    if path.exists() and any(path.iterdir()):
+        if wdir_cfg.reuse:
+            if cfg.debug:
+                print(f"{_name_}: reuse old work dir at {path}")
+        elif wdir_cfg.replace:
+            if cfg.debug:
+                print(f"{_name_}: remove old work dir at {path}")
+            shutil.rmtree(path)
+        else:
+            if cfg.debug:
+                print(
+                    f"{_name_}: old work dir at {path} is neither to be reused nor"
+                    " replaced"
+                )
+            raise PathExistsError(path)
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def create_plots(
@@ -118,7 +173,7 @@ def create_plots(
     plot_paths: List[Path] = []
     for preset, infile in zip_presets_infiles(plot_cfg):
         plot_paths.extend(
-            create_plots_preset(exe_path, work_path, preset, infile, plot_cfg, cfg)
+            create_plots_for_preset(exe_path, work_path, preset, infile, plot_cfg, cfg)
         )
     return plot_paths
 
@@ -126,7 +181,7 @@ def create_plots(
 # pylint: disable=R0912  # too-many-branches (>12)
 # pylint: disable=R0913  # too-many-arguments (>5)
 # pylint: disable=R0914  # too-many-locals (>15)
-def create_plots_preset(
+def create_plots_for_preset(
     exe_path: Path,
     work_path: Path,
     preset: str,
@@ -135,16 +190,10 @@ def create_plots_preset(
     cfg: RunConfig,
 ) -> List[Path]:
     """Create plots for an individual preset."""
+    _name_ = "main.create_plots_preset"
     os.chdir(work_path)
     if plot_cfg.data_path:
-        data_path = Path("data")
-        if data_path.exists():
-            if not data_path.is_symlink():
-                raise Exception(f"{data_path.absolute()} exists and is not a symlink")
-            data_path.unlink()
-        if not plot_cfg.data_path.exists():
-            raise Exception(f"data path not found: {plot_cfg.data_path}")
-        Path("data").symlink_to(plot_cfg.data_path)
+        link_data_path(plot_cfg.data_path, cfg)
 
     cmd_args = [
         str(exe_path),
@@ -159,54 +208,101 @@ def create_plots_preset(
     cmd_args += [f"--num-procs={plot_cfg.num_procs}"]
 
     # Perform dry-run to obtain the plots that will be produced
-    n_plots = perform_dry_run(cmd_args_dry, cfg)
+    expected_plot_names = perform_dry_run(cmd_args_dry, cfg)
+    expected_plot_paths = [work_path / name for name in expected_plot_names]
+    n_plots = len(expected_plot_names)
+
+    if plot_cfg.reuse:
+        n_existing = sum(map(Path.exists, expected_plot_paths))
+        if n_existing == n_plots:
+            print(f"reuse existing plots ({n_plots}) in {work_path}/")
+            return expected_plot_paths
+        elif n_existing == 0:
+            if cfg.debug:
+                print(
+                    f"{_name_}: compute plots because no expected plots already exist"
+                )
+        else:
+            print(
+                "recompute all plots because some, but not all expected plots"
+                f" ({n_existing}/{n_plots})already exist"
+            )
+            for path in expected_plot_paths:
+                if cfg.debug:
+                    print(f"{_name_}: remove {path}")
+                path.unlink()
 
     # Perform actual run, using the number of plots to show progress
     if cfg.verbose:
         print(f"current directory: {Path('.').absolute()}")
-    print(f"create {n_plots} plots:")
+    print(f"create {n_plots} plots in {work_path}:")
     print(f"$ {' '.join(cmd_args)}")
     plot_paths: List[Path] = []
     i_plot = 0
     for i_line, line in enumerate(run_cmd(cmd_args, real_time=True)):
-        try:
-            _, plot = line.split(" -> ")
-        except ValueError:
-            continue
-        else:
-            i_plot += 1
         if cfg.debug:
-            print(f"[{i_line}|{i_plot / n_plots:.0%}] {line}")
-        elif cfg.verbose:
+            print(f"{_name_}: line {i_line}: {line}")
+        plot_name = parse_line_for_plot_name(line)
+        if not plot_name:
+            continue
+        plot_path = work_path / plot_name
+        plot_paths.append(plot_path)
+        if plot_path not in expected_plot_paths:
+            raise Exception(
+                f"unexpected plot path: {plot_path}\nexpected:\n"
+                + "\n  ".join(map(str, expected_plot_paths))
+            )
+        i_plot += 1
+        if cfg.verbose:
             print(f"[{i_plot / n_plots:.0%}] {line}")
         else:
             print(f"\r[{i_plot / n_plots:.0%}] {i_plot}/{n_plots}", end="", flush=True)
-        plot_path = work_path / plot
-        plot_paths.append(plot_path)
     if not cfg.verbose:
         print()
 
     return plot_paths
 
 
-def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> int:
+def link_data_path(target_path: Path, cfg: RunConfig) -> None:
+    _name_ = "main.link_data_path"
+    if not target_path.exists():
+        raise Exception(f"data path not found: {target_path}")
+    link_path = Path("data")
+    if link_path.exists():
+        if not link_path.is_symlink():
+            raise Exception(
+                f"data link path {link_path.absolute()} exists and is not a symlink"
+            )
+        if cfg.debug:
+            print(f"{_name_}: remove existing data link path {link_path}")
+        link_path.unlink()
+    if cfg.debug:
+        print(f"{_name_}: symlinklink data path {link_path} to {target_path}")
+    link_path.symlink_to(target_path)
+
+
+def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> List[str]:
     """Perform a dry-run to obtain the number of plots to be created."""
+    _name_ = "main.perform_dry_run"
     if cfg.verbose:
         print(
-            "perform dry run to identify plots to be created:\n$ "
-            + " ".join(cmd_args_dry)
+            "perform dry run to determine expected plots:\n$ " + " ".join(cmd_args_dry)
         )
-    n_plots = 0
+    plots: List[str] = []
     for line in run_cmd(cmd_args_dry, real_time=True):
-        try:
-            _, _ = line.split(" -> ")
-        except ValueError:
-            continue
-        else:
-            n_plots += 1
+        plot = parse_line_for_plot_name(line)
+        if plot:
+            if cfg.debug:
+                print(f"{_name_}: {plot}")
+            plots.append(plot)
     if cfg.verbose:
-        print(f"expecting {n_plots} to be created")
-    return n_plots
+        print(f"expecting {len(plots)} plots to be created")
+    return plots
+
+
+def parse_line_for_plot_name(line: str) -> Optional[str]:
+    match = re.match(r"\b[^ ]+ -> (?P<path>[^ ]+)\b", line)
+    return match.group("path") if match else None
 
 
 class PlotPair:
@@ -373,7 +469,7 @@ class PlotPairSequence:
             cfg: Run configuration.
 
         """
-        print(f"comparing {len(self)} pairs of plots")
+        print(f"comparing {len(self)} pairs of plots:")
         diff_paths: List[Path] = []
         for pair in self:
             diff_path = pair.compare(diffs_path, cfg)

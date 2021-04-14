@@ -14,11 +14,12 @@ from click import Context
 
 # Local
 from . import __version__
+from .config import CloneConfig
 from .config import PlotConfig
-from .config import RepoConfig
 from .config import RunConfig
+from .config import WorkDirConfig
 from .exceptions import PathExistsError
-from .main import create_plots
+from .main import create_plots as _create_plots_core
 from .main import install_exe
 from .main import PlotPairSequence
 from .main import prepare_clone
@@ -67,7 +68,8 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 @click.option(
-    "--data-path",
+    "--data",
+    "data_path",
     help="path to data directory",
     type=PathlibPath(),
     default="data",
@@ -132,6 +134,16 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     default="git@github.com:MeteoSwiss-APN/pyflexplot.git",
 )
 @click.option(
+    "--reuse-installs/--reinstall",
+    help="reuse venvs of existing repo clones instead of reinstalling",
+    default=False,
+)
+@click.option(
+    "--reuse-plots/--recompute-plots",
+    help="reuse existing plots rather than recomputing them",
+    default=False,
+)
+@click.option(
     "-v",
     "verbosity",
     help="increase verbosity",
@@ -163,6 +175,8 @@ def cli(
     only: Optional[int],
     presets: Tuple[str, ...],
     repo_path: str,
+    reuse_installs: bool,
+    reuse_plots: bool,
     work_dir_path: Path,
     **cfg_kwargs,
 ) -> None:
@@ -195,7 +209,7 @@ def cli(
 
     if old_rev is None:
         if cfg.verbose:
-            print(f"obtain old_rev from repo: {repo_path}")
+            print(f"obtain old_rev from repo {repo_path}")
         tags = git_get_remote_tags(repo_path)
         if cfg.verbose:
             sel_tags = tags if len(tags) <= 7 else tags[:3] + ["..."] + tags[-3:]
@@ -216,40 +230,69 @@ def cli(
     diffs_path = work_dir_path / "work" / f"{old_rev}_vs_{new_rev}"
     diffs_path.mkdir(parents=True, exist_ok=True)
 
-    prepare_work_path(ctx, "old work dir", old_work_path, cfg)
-    prepare_work_path(ctx, "new work dir", new_work_path, cfg)
-    prepare_work_path(ctx, "diffs dir", diffs_path, cfg)
-
-    old_repo_cfg = RepoConfig(
-        rev=old_rev,
-        clone_path=old_clones_path,
-        work_path=old_work_path,
+    old_wdir_cfg = WorkDirConfig(
+        path=old_work_path,
+        reuse=reuse_plots,
+        replace=cfg.force,
     )
-    new_repo_cfg = RepoConfig(
+    new_wdir_cfg = WorkDirConfig(
+        path=new_work_path,
+        reuse=reuse_plots,
+        replace=cfg.force,
+    )
+    # Note: This always replaces all diff plots, even if a rerun is made with
+    # fewer presets than a previous runs, in which case the diff plots of the
+    # left-out presets will be lost (but can easily be recomputed by rerunning
+    # with all previous presets at once with --reuse-plots and --reuse-installs)
+    diffs_wdir_cfg = WorkDirConfig(
+        path=diffs_path,
+        reuse=False,
+        replace=True,
+    )
+    old_clone_cfg = CloneConfig(
+        path=old_clones_path,
+        rev=old_rev,
+        reuse=reuse_installs,
+        wdir=old_wdir_cfg,
+    )
+    new_clone_cfg = CloneConfig(
+        path=new_clones_path,
         rev=new_rev,
-        clone_path=new_clones_path,
-        work_path=new_work_path,
+        reuse=reuse_installs,
+        wdir=new_wdir_cfg,
     )
     plot_cfg = PlotConfig(
-        presets=presets,
-        infiles=infiles,
         data_path=data_path,
+        infiles=infiles,
         num_procs=num_procs,
         only=only,
+        presets=presets,
+        reuse=reuse_plots,
     )
 
-    # Create plots
-    old_plot_paths = create_clone_and_plots(
-        ctx, repo_path, "old", old_repo_cfg, plot_cfg, cfg
+    old_exe_path = prepare_exe(
+        ctx, repo_path=repo_path, case="old", clone_cfg=old_clone_cfg, cfg=cfg
     )
-    new_plot_paths = create_clone_and_plots(
-        ctx, repo_path, "new", new_repo_cfg, plot_cfg, cfg
+    new_exe_path = prepare_exe(
+        ctx, repo_path=repo_path, case="new", clone_cfg=new_clone_cfg, cfg=cfg
     )
+
+    prepare_work_path(ctx, "old work dir", old_wdir_cfg, cfg)
+    prepare_work_path(ctx, "new work dir", new_wdir_cfg, cfg)
+    prepare_work_path(ctx, "diffs dir", diffs_wdir_cfg, cfg)
+
+    old_plot_paths = create_plots(
+        "old", old_exe_path, old_clone_cfg.wdir.path, plot_cfg, cfg
+    )
+    new_plot_paths = create_plots(
+        "new", new_exe_path, new_clone_cfg.wdir.path, plot_cfg, cfg
+    )
+
     plot_pairs = PlotPairSequence(
         paths1=old_plot_paths,
         paths2=new_plot_paths,
-        base1=old_repo_cfg.work_path,
-        base2=new_repo_cfg.work_path,
+        base1=old_clone_cfg.wdir.path,
+        base2=new_clone_cfg.wdir.path,
     )
 
     # Compare plots
@@ -264,44 +307,47 @@ def cli(
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
-def create_clone_and_plots(
+def prepare_exe(
     ctx: Context,
-    repo_path: str,
+    *,
     case: str,
-    repo_cfg: RepoConfig,
-    plot_cfg: PlotConfig,
     cfg: RunConfig,
+    clone_cfg: CloneConfig,
+    repo_path: str,
+) -> Path:
+    """Prepare clone of repo, install into virtual env and return exe path."""
+    print(f"prepare {case} clone or {repo_path}@{clone_cfg.rev} at {clone_cfg.path}")
+    try:
+        prepare_clone(repo_path, clone_cfg, cfg)
+    except PathExistsError as e:
+        click.echo(
+            f"error: preparing {case} clone failed because {e} already exists"
+            "; use --reuse-installs or similar to reuse or --force to overwrite",
+            file=sys.stderr,
+        )
+        ctx.exit(1)
+    if cfg.verbose:
+        print(f"prepare {case} executable in {clone_cfg.path}")
+    exe_path = install_exe(clone_cfg.path, clone_cfg.reuse, cfg)
+    return exe_path
+
+
+def prepare_work_path(
+    ctx: Context, name: str, wdir_cfg: WorkDirConfig, cfg: RunConfig
+) -> None:
+    try:
+        _prepare_work_path_core(wdir_cfg, cfg)
+    except PathExistsError as e:
+        click.echo(
+            f"error: preparing {name} failed because {e} already exists"
+            "; use --reuse-plots or similar to reuse or --force to overwrite",
+            file=sys.stderr,
+        )
+        ctx.exit(1)
+
+
+def create_plots(
+    case: str, exe_path: Path, work_path: Path, plot_cfg: PlotConfig, cfg: RunConfig
 ) -> List[Path]:
-    # Create clone of repository
-    print(f"prepare {case} clone: {repo_path}@{repo_cfg.rev} -> {repo_cfg.clone_path}")
-    try:
-        prepare_clone(repo_path, repo_cfg.clone_path, repo_cfg.rev, cfg)
-    except PathExistsError as e:
-        click.echo(
-            f"error: preparing {case} clone failed because '{e}' already exists"
-            "; use -f or --force to overwrite",
-            file=sys.stderr,
-        )
-        ctx.exit(1)
-
-    # Install pyflexplot into virtual env
-    print(f"prepare {case} executable in {repo_cfg.clone_path}")
-    exe_path = install_exe(repo_cfg.clone_path, cfg)
-
-    # Create plots
-    print(f"create {case} plots with {exe_path} in {repo_cfg.work_path}")
-    plot_paths = create_plots(exe_path, repo_cfg.work_path, plot_cfg, cfg)
-
-    return plot_paths
-
-
-def prepare_work_path(ctx: Context, name: str, path: Path, cfg: RunConfig) -> None:
-    try:
-        _prepare_work_path_core(path, cfg)
-    except PathExistsError as e:
-        click.echo(
-            f"error: preparing {name} failed because '{e}' already exists"
-            "; use -f or --force to overwrite",
-            file=sys.stderr,
-        )
-        ctx.exit(1)
+    print(f"prepare {case} plots in {work_path}")
+    return _create_plots_core(exe_path, work_path, plot_cfg, cfg)

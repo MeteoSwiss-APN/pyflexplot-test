@@ -21,16 +21,38 @@ class RunConfig:
 
 
 @dc.dataclass
-class RepoConfig:
-    clone_path: Path
+class WorkDirConfig:
+    """Work dir config.
+
+    Params:
+        path: Path to work dir.
+
+        reuse: Reuse existing work dir at ``path``; if true, takes precedence
+            over ``replace``.
+
+        replace (optional): Replace existing work dir at ``path``, unless
+            reused; ignored if ``reuse`` is true.
+
+    """
+
+    path: Path
+    reuse: bool
+    replace: bool = False
+
+
+@dc.dataclass
+class CloneConfig:
+    path: Path
     rev: str
-    work_path: Path
+    reuse: bool
+    wdir: WorkDirConfig
 
 
 @dc.dataclass
 class PlotConfig:
-    presets: Sequence[str]
-    infiles: Sequence[str]
     data_path: Optional[Path]
+    infiles: Sequence[str]
     num_procs: int
     only: Optional[int]
+    presets: Sequence[str]
+    reuse: bool
