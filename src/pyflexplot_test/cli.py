@@ -47,18 +47,17 @@ def check_for_active_venv(ctx: Context) -> None:
     ctx.exit(1)
 
 
-def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) -> None:
+def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
     n_in = len(infiles)
-    n_pre = len(presets)
-    if n_in > n_pre:
+    if n_in > n_presets:
         click.echo(
-            f"error: more infiles ({n_in}) than presets ({n_pre})", file=sys.stderr
+            f"error: more infiles ({n_in}) than presets ({n_presets})", file=sys.stderr
         )
         ctx.exit(1)
-    if n_pre > 1 and n_in > 1 and n_in != n_pre:
+    if n_presets > 1 and n_in > 1 and n_in != n_presets:
         click.echo(
-            f"error: multiple presets ({n_pre}) and infiles ({n_in}), but their numbers"
-            " don't match",
+            f"error: multiple presets ({n_presets}) and infiles ({n_in}), but their"
+            " numbersdon't match",
             file=sys.stderr,
         )
         ctx.exit(1)
@@ -122,6 +121,16 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     default=None,
 )
 @click.option(
+    "--old-new-presets",
+    "old_new_presets",
+    help=(
+        "pair of presets used to create old and new plots, respectively; may be"
+        " repeated; equivalent to (but incompatible with) --preset"
+    ),
+    nargs=2,
+    multiple=True,
+)
+@click.option(
     "--old-rev",
     help=(
         "old revision of pyflexplot; defaults to lanew tag; may be anything"
@@ -137,9 +146,11 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
 @click.option(
     "--preset",
     "presets",
-    help="preset used to create plots; may be repeated",
+    help=(
+        "preset used to create plots; may be repeated; equivalent to (but"
+        " incompatible with) --old-new-presets"
+    ),
     multiple=True,
-    default=["opr/*/all_png"],
 )
 @click.option(
     "--repo",
@@ -187,6 +198,7 @@ def cli(
     new_rev: str,
     num_procs: int,
     old_data_path: Optional[Path],
+    old_new_presets: Tuple[Tuple[str, str], ...],
     old_rev: Optional[str],
     only: Optional[int],
     presets: Tuple[str, ...],
@@ -200,33 +212,16 @@ def cli(
     cfg = RunConfig(**cfg_kwargs)
 
     check_for_active_venv(ctx)
-    check_infiles(ctx, infiles, presets)
 
     start_path = Path(".").absolute()
     old_data_path, new_data_path = prepare_data_paths(
         data_path, old_data_path, new_data_path
     )
-    old_data_path.exists()
-
-    for preset in presets:
-        if preset.endswith("_pdf"):
-            raise NotImplementedError(f"PDF presets ({preset})")
-
+    old_presets, new_presets = prepare_presets(ctx, presets, old_new_presets)
+    check_infiles(ctx, infiles, len(old_presets))
     infiles = tuple([str(Path(infile).absolute()) for infile in infiles])
 
     work_dir_path = work_dir_path.absolute()
-
-    if cfg.debug:
-        print(f"{_name_}: old_data_path: {old_data_path}")
-        print(f"{_name_}: new_data_path: {new_data_path}")
-        print(f"{_name_}: infiles: {infiles}")
-        print(f"{_name_}: num_procs: {num_procs}")
-        print(f"{_name_}: only: {only}")
-        print(f"{_name_}: presets: {presets}")
-        print(f"{_name_}: old_rev: {old_rev}")
-        print(f"{_name_}: repo_path: {repo_path}")
-        print(f"{_name_}: new_rev: {new_rev}")
-        print(f"{_name_}: work_dir_path: {work_dir_path}")
 
     if old_rev is None:
         if cfg.verbose:
@@ -238,6 +233,19 @@ def cli(
         old_rev = tags[-1]
         if cfg.verbose:
             print(f"old_rev: {old_rev}")
+
+    if cfg.debug:
+        print(f"{_name_}: infiles: {infiles}")
+        print(f"{_name_}: new_data_path: {new_data_path}")
+        print(f"{_name_}: new_presets: {new_presets}")
+        print(f"{_name_}: new_rev: {new_rev}")
+        print(f"{_name_}: num_procs: {num_procs}")
+        print(f"{_name_}: old_data_path: {old_data_path}")
+        print(f"{_name_}: old_presets: {old_presets}")
+        print(f"{_name_}: old_rev: {old_rev}")
+        print(f"{_name_}: only: {only}")
+        print(f"{_name_}: repo_path: {repo_path}")
+        print(f"{_name_}: work_dir_path: {work_dir_path}")
 
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
@@ -287,7 +295,7 @@ def cli(
         infiles=infiles,  # SR_TMP TODO old-specific infiles
         num_procs=num_procs,
         only=only,
-        presets=presets,  # SR_TMP TODO old-specific presets
+        presets=old_presets,
         reuse=reuse_plots,  # SR_TMP TODO old-specific reuse
     )
     new_plot_cfg = PlotConfig(
@@ -295,7 +303,7 @@ def cli(
         infiles=infiles,  # SR_TMP TODO new-specific infiles
         num_procs=num_procs,
         only=only,
-        presets=presets,  # SR_TMP TODO new-specific presets
+        presets=new_presets,
         reuse=reuse_plots,  # SR_TMP TODO new-specific reuse
     )
 
@@ -333,6 +341,33 @@ def cli(
         )
         if cfg.verbose:
             print("\n".join([str(p.relative_to(start_path)) for p in diff_plot_paths]))
+
+
+def prepare_presets(
+    ctx: Context,
+    presets: Sequence[str],
+    old_new_presets: Sequence[Tuple[str, str]],
+) -> Tuple[List[str], List[str]]:
+    """Prepare preset strings for old and new revision."""
+    old_presets: List[str] = []
+    new_presets: List[str] = []
+    if not presets and not old_new_presets:
+        click.echo(
+            "must pass --preset or --old-new-presets at least once", file=sys.stderr
+        )
+        ctx.exit(1)
+    elif presets:
+        old_presets.extend(presets)
+        new_presets.extend(presets)
+    else:
+        for old_preset, new_preset in old_new_presets:
+            old_presets.append(old_preset)
+            new_presets.append(new_preset)
+    for presets_i in [old_presets, new_presets]:
+        for preset in presets_i:
+            if preset.endswith("_pdf"):
+                raise NotImplementedError(f"PDF presets ({preset})")
+    return old_presets, new_presets
 
 
 def prepare_data_paths(
