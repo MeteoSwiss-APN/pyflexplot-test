@@ -91,17 +91,13 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     default=[],
 )
 @click.option(
-    "--only",
-    help="restrict the number of plots per preset",
-    type=int,
-    default=None,
-)
-@click.option(
-    "--preset",
-    "presets",
-    help="preset used to create plots; may be repeated",
-    multiple=True,
-    default=["opr/*/all_png"],
+    "--new-rev",
+    help=(
+        "new revision of pyflexplot; defaults to 'dev' (head of development"
+        " branch); may be anything that git can check out (tag name, branch"
+        " name, commit hash"
+    ),
+    default="dev",
 )
 @click.option(
     "--num-procs",
@@ -117,26 +113,23 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     ),
 )
 @click.option(
+    "--only",
+    help="restrict the number of plots per preset",
+    type=int,
+    default=None,
+)
+@click.option(
+    "--preset",
+    "presets",
+    help="preset used to create plots; may be repeated",
+    multiple=True,
+    default=["opr/*/all_png"],
+)
+@click.option(
     "--repo",
     "repo_path",
     help="pyflexplot repository path",
     default="git@github.com:MeteoSwiss-APN/pyflexplot.git",
-)
-@click.option(
-    "--new-rev",
-    help=(
-        "new revision of pyflexplot; defaults to 'dev' (head of development"
-        " branch); may be anything that git can check out (tag name, branch"
-        " name, commit hash"
-    ),
-    default="dev",
-)
-@click.option(
-    "--work-dir",
-    "work_dir_path",
-    help="working directory",
-    default="pyflexplot-test",
-    type=PathlibPath(),
 )
 @click.option(
     "-v",
@@ -150,6 +143,13 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     "-V",
     message="%(version)s",
 )
+@click.option(
+    "--work-dir",
+    "work_dir_path",
+    help="working directory",
+    default="pyflexplot-test",
+    type=PathlibPath(),
+)
 @click.pass_context
 # pylint: disable=R0913  # too-many-arguments (>5)
 # pylint: disable=R0914  # too-many-locals (>15)
@@ -157,12 +157,12 @@ def cli(
     ctx: Context,
     data_path: Path,
     infiles: Tuple[str, ...],
+    new_rev: str,
     num_procs: int,
+    old_rev: Optional[str],
     only: Optional[int],
     presets: Tuple[str, ...],
-    old_rev: Optional[str],
     repo_path: str,
-    new_rev: str,
     work_dir_path: Path,
     **cfg_kwargs,
 ) -> None:
