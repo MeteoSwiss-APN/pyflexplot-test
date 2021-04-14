@@ -159,7 +159,10 @@ def check_paths_equiv(
         for path1, rel_path1 in zip(list(paths1), list(rel_paths1)):
             if rel_path1 in rel_paths2:
                 continue
-            msg = f"path from relative {name1} missing in relative {name2}: {rel_path1}"
+            msg = (
+                f"path from relative paths '{name1}' missing in relative paths"
+                f" '{name2}': {rel_path1}"
+            )
             if action == "raise":
                 raise AssertionError(msg)
             elif action == "warn":

@@ -233,8 +233,6 @@ def create_plots_for_preset(
                 path.unlink()
 
     # Perform actual run, using the number of plots to show progress
-    if cfg.verbose:
-        print(f"current directory: {Path('.').absolute()}")
     print(f"create {n_plots} plots in {work_path}:")
     print(f"$ {' '.join(cmd_args)}")
     plot_paths: List[Path] = []
@@ -469,6 +467,9 @@ class PlotPairSequence:
             cfg: Run configuration.
 
         """
+        if len(self) == 0:
+            print("error: no pairs of plots to compate")
+            return []
         print(f"comparing {len(self)} pairs of plots:")
         diff_paths: List[Path] = []
         for pair in self:

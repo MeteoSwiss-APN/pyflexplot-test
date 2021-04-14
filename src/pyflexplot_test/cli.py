@@ -28,7 +28,7 @@ from .utils import git_get_remote_tags
 
 
 class PathlibPath(click.ParamType):
-    name = "pathlib.Path"
+    name = "Path"
 
     # pylint: disable=W0613  # unused-argument (param, ctx)
     # pylint: disable=R0201  # no-self-use
@@ -70,7 +70,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
 @click.option(
     "--data",
     "data_path",
-    help="path to data directory",
+    help="path to data directory; overridden by --old-data and --new-data",
     type=PathlibPath(),
     default="data",
 )
@@ -93,6 +93,13 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     default=[],
 )
 @click.option(
+    "--new-data",
+    "new_data_path",
+    help="path to data directory for --old-rev; overrides or defaults to --data",
+    type=PathlibPath(),
+    default=None,
+)
+@click.option(
     "--new-rev",
     help=(
         "new revision of pyflexplot; defaults to 'dev' (head of development"
@@ -106,6 +113,13 @@ def check_infiles(ctx: Context, infiles: Sequence[str], presets: Sequence[str]) 
     help="number of parallel processes during plotting",
     type=int,
     default=1,
+)
+@click.option(
+    "--old-data",
+    "old_data_path",
+    help="path to data directory for --new-rev; overrides or defaults to --data",
+    type=PathlibPath(),
+    default=None,
 )
 @click.option(
     "--old-rev",
@@ -169,8 +183,10 @@ def cli(
     ctx: Context,
     data_path: Path,
     infiles: Tuple[str, ...],
+    new_data_path: Optional[Path],
     new_rev: str,
     num_procs: int,
+    old_data_path: Optional[Path],
     old_rev: Optional[str],
     only: Optional[int],
     presets: Tuple[str, ...],
@@ -180,13 +196,17 @@ def cli(
     work_dir_path: Path,
     **cfg_kwargs,
 ) -> None:
+    _name_ = "cli.cli"
     cfg = RunConfig(**cfg_kwargs)
 
     check_for_active_venv(ctx)
     check_infiles(ctx, infiles, presets)
 
     start_path = Path(".").absolute()
-    data_path = data_path.absolute()
+    old_data_path, new_data_path = prepare_data_paths(
+        data_path, old_data_path, new_data_path
+    )
+    old_data_path.exists()
 
     for preset in presets:
         if preset.endswith("_pdf"):
@@ -196,16 +216,17 @@ def cli(
 
     work_dir_path = work_dir_path.absolute()
 
-    if cfg.verbose:
-        print(f"data_path: {data_path}")
-        print(f"infiles: {infiles}")
-        print(f"num_procs: {num_procs}")
-        print(f"only: {only}")
-        print(f"presets: {presets}")
-        print(f"old_rev: {old_rev}")
-        print(f"repo_path: {repo_path}")
-        print(f"new_rev: {new_rev}")
-        print(f"work_dir_path: {work_dir_path}")
+    if cfg.debug:
+        print(f"{_name_}: old_data_path: {old_data_path}")
+        print(f"{_name_}: new_data_path: {new_data_path}")
+        print(f"{_name_}: infiles: {infiles}")
+        print(f"{_name_}: num_procs: {num_procs}")
+        print(f"{_name_}: only: {only}")
+        print(f"{_name_}: presets: {presets}")
+        print(f"{_name_}: old_rev: {old_rev}")
+        print(f"{_name_}: repo_path: {repo_path}")
+        print(f"{_name_}: new_rev: {new_rev}")
+        print(f"{_name_}: work_dir_path: {work_dir_path}")
 
     if old_rev is None:
         if cfg.verbose:
@@ -261,13 +282,21 @@ def cli(
         reuse=reuse_installs,
         wdir=new_wdir_cfg,
     )
-    plot_cfg = PlotConfig(
-        data_path=data_path,
-        infiles=infiles,
+    old_plot_cfg = PlotConfig(
+        data_path=old_data_path,
+        infiles=infiles,  # SR_TMP TODO old-specific infiles
         num_procs=num_procs,
         only=only,
-        presets=presets,
-        reuse=reuse_plots,
+        presets=presets,  # SR_TMP TODO old-specific presets
+        reuse=reuse_plots,  # SR_TMP TODO old-specific reuse
+    )
+    new_plot_cfg = PlotConfig(
+        data_path=new_data_path,
+        infiles=infiles,  # SR_TMP TODO new-specific infiles
+        num_procs=num_procs,
+        only=only,
+        presets=presets,  # SR_TMP TODO new-specific presets
+        reuse=reuse_plots,  # SR_TMP TODO new-specific reuse
     )
 
     old_exe_path = prepare_exe(
@@ -282,10 +311,10 @@ def cli(
     prepare_work_path(ctx, "diffs dir", diffs_wdir_cfg, cfg)
 
     old_plot_paths = create_plots(
-        "old", old_exe_path, old_clone_cfg.wdir.path, plot_cfg, cfg
+        "old", old_exe_path, old_clone_cfg.wdir.path, old_plot_cfg, cfg
     )
     new_plot_paths = create_plots(
-        "new", new_exe_path, new_clone_cfg.wdir.path, plot_cfg, cfg
+        "new", new_exe_path, new_clone_cfg.wdir.path, new_plot_cfg, cfg
     )
 
     plot_pairs = PlotPairSequence(
@@ -304,6 +333,18 @@ def cli(
         )
         if cfg.verbose:
             print("\n".join([str(p.relative_to(start_path)) for p in diff_plot_paths]))
+
+
+def prepare_data_paths(
+    path: Path, old_path: Optional[Path], new_path: Optional[Path]
+) -> Tuple[Path, Path]:
+    if path is None:
+        raise ValueError("path must not be None")
+    if old_path is None:
+        old_path = path
+    if new_path is None:
+        new_path = path
+    return old_path.absolute(), new_path.absolute()
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
