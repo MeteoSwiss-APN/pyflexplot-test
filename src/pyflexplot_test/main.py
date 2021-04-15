@@ -4,6 +4,8 @@ import filecmp
 import os
 import re
 import shutil
+import sys
+import traceback
 from pathlib import Path
 from subprocess import PIPE
 from subprocess import Popen
@@ -494,7 +496,17 @@ class PlotPairSequence:
         print(f"comparing {len(self)} pairs of plots:")
         diff_paths: List[Path] = []
         for pair in self:
-            diff_path = pair.compare(diffs_path, cfg)
+            try:
+                diff_path = pair.compare(diffs_path, cfg)
+            except Exception:
+                print("-" * 50, file=sys.stderr)
+                traceback.print_exc()
+                print("-" * 50, file=sys.stderr)
+                print(
+                    "error during diff creation (see traceback above);"
+                    f" abort comparison of {pair.rel_path1} and {pair.rel_path2}",
+                    file=sys.stderr,
+                )
             if diff_path is not None:
                 diff_paths.append(diff_path)
         return diff_paths
