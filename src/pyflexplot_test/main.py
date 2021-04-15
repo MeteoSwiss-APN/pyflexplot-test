@@ -214,23 +214,32 @@ def create_plots_for_preset(
 
     if plot_cfg.reuse:
         n_existing = sum(map(Path.exists, expected_plot_paths))
+        if cfg.debug:
+            print(
+                f"{_name_}: found {n_existing}/{n_plots} expected plots in {work_path}/"
+            )
         if n_existing == n_plots:
-            print(f"reuse existing plots ({n_plots}) in {work_path}/")
+            print(f"reuse the {n_existing}/{n_plots} expected plots in {work_path}/")
             return expected_plot_paths
         elif n_existing == 0:
             if cfg.debug:
                 print(
-                    f"{_name_}: compute plots because no expected plots already exist"
+                    f"{_name_}: compute plots because none of the {n_plots} expected"
+                    f" plots already exist in {work_path}/"
                 )
         else:
             print(
-                "recompute all plots because some, but not all expected plots"
-                f" ({n_existing}/{n_plots})already exist"
+                f"recompute all plots because only {n_existing}/{n_plots} expected"
+                f" plots already exist in {work_path}/"
             )
             for path in expected_plot_paths:
-                if cfg.debug:
-                    print(f"{_name_}: remove {path}")
-                path.unlink()
+                if not path.exists():
+                    if cfg.debug:
+                        print(f"{_name_}: skip non-existing {path}")
+                else:
+                    if cfg.debug:
+                        print(f"{_name_}: remove {path}")
+                    path.unlink()
 
     # Perform actual run, using the number of plots to show progress
     print(f"create {n_plots} plots in {work_path}:")
