@@ -331,24 +331,36 @@ class PlotPair:
 
             path2: Path to second plot; file name must be the same as ``path1``.
 
-            base1 (optional): Base directory of ``path``; equal to the base name
-                of ``path1`` unless the plot files are located in equal sub-
-                directories, e.g., path1='<base1>/foo/bar/baz.png` and
-                path2=`<base2>/foo/bar/baz.png`.
+            base1 (optional): Base directory of ``path1``; equal to the basename
+                of ``path1`` plus all preceding subdirectories shared with
+                ``path2``; e.g., the bases for two paths 'foo/hello/world.png`
+                and 'bar/hello/world.png` would be 'foo` and 'bar`, given the
+                shared base compolent 'hello/world.png`.
 
             base2 (optional): Like ``base1`` but for ``path2``.
 
         """
         self.path1: Path = Path(path1)
         self.path2: Path = Path(path2)
-        shared1 = self.path1.relative_to(base1) if base1 else self.path1
-        shared2 = self.path2.relative_to(base2) if base2 else self.path2
-        if shared1 != shared2:
+        self.base1: Path = Path(base1 or self.path1.root)
+        self.base2: Path = Path(base2 or self.path2.root)
+        shared_base1 = self.path1.relative_to(self.base1)
+        shared_base2 = self.path2.relative_to(self.base2)
+        if shared_base1 != shared_base2:
             raise ValueError(
                 "inconsistent paths and bases; shared path components differ:"
-                f" {shared1} != {shared2}"
+                f" {shared_base1} != {shared_base2}"
             )
-        self.shared_path: Path = shared1
+        self.shared_base: Path = shared_base1
+        self.shared_root: Path = Path(os.path.commonpath([self.base1, self.base2]))
+
+    @property
+    def rel_path1(self) -> Path:
+        return self.path1.relative_to(self.shared_root)
+
+    @property
+    def rel_path2(self) -> Path:
+        return self.path2.relative_to(self.shared_root)
 
     def compare(
         self,
@@ -356,12 +368,12 @@ class PlotPair:
         cfg: RunConfig = RunConfig(),
     ) -> Optional[Path]:
         if cfg.verbose:
-            print(f"comparing pair {self.shared_path}")
+            print(f"comparing pair {self.shared_base}")
         if filecmp.cmp(self.path1, self.path2):
-            print(f"identical: {self.shared_path}")
+            print(f"identical: {self.shared_base}")
             return None
-        print(f"differing: {self.shared_path}")
-        diff_path = self.shared_path
+        print(f"differing: {self.shared_base}")
+        diff_path = self.shared_base
         if diffs_path:
             diff_path = Path(diffs_path) / diff_path
         if self._equal_sized():
