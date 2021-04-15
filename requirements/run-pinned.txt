@@ -1,4 +1,5 @@
 click==7.1.2
-gitdb==4.0.5
-GitPython==3.1.11
-smmap==3.0.4
+gitdb==4.0.7
+GitPython==3.1.14
+smmap==4.0.0
+typing-extensions==3.7.4.3
