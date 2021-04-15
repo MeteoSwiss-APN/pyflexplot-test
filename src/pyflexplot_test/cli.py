@@ -121,8 +121,8 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
     default=None,
 )
 @click.option(
-    "--old-new-presets",
-    "old_new_presets",
+    "--presets-old-new",
+    "presets_old_new",
     help=(
         "pair of presets used to create old and new plots, respectively; may be"
         " repeated; equivalent to (but incompatible with) --preset"
@@ -148,7 +148,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
     "presets",
     help=(
         "preset used to create plots; may be repeated; equivalent to (but"
-        " incompatible with) --old-new-presets"
+        " incompatible with) --presets-old-new"
     ),
     multiple=True,
 )
@@ -198,7 +198,7 @@ def cli(
     new_rev: str,
     num_procs: int,
     old_data_path: Optional[Path],
-    old_new_presets: Tuple[Tuple[str, str], ...],
+    presets_old_new: Tuple[Tuple[str, str], ...],
     old_rev: Optional[str],
     only: Optional[int],
     presets: Tuple[str, ...],
@@ -217,7 +217,7 @@ def cli(
     old_data_path, new_data_path = prepare_data_paths(
         data_path, old_data_path, new_data_path
     )
-    old_presets, new_presets = prepare_presets(ctx, presets, old_new_presets)
+    old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     check_infiles(ctx, infiles, len(old_presets))
     infiles = tuple([str(Path(infile).absolute()) for infile in infiles])
 
@@ -346,21 +346,21 @@ def cli(
 def prepare_presets(
     ctx: Context,
     presets: Sequence[str],
-    old_new_presets: Sequence[Tuple[str, str]],
+    presets_old_new: Sequence[Tuple[str, str]],
 ) -> Tuple[List[str], List[str]]:
     """Prepare preset strings for old and new revision."""
     old_presets: List[str] = []
     new_presets: List[str] = []
-    if not presets and not old_new_presets:
+    if not presets and not presets_old_new:
         click.echo(
-            "must pass --preset or --old-new-presets at least once", file=sys.stderr
+            "must pass --preset or --presets-old-new at least once", file=sys.stderr
         )
         ctx.exit(1)
     elif presets:
         old_presets.extend(presets)
         new_presets.extend(presets)
     else:
-        for old_preset, new_preset in old_new_presets:
+        for old_preset, new_preset in presets_old_new:
             old_presets.append(old_preset)
             new_presets.append(new_preset)
     for presets_i in [old_presets, new_presets]:
