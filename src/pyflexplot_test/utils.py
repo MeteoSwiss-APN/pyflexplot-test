@@ -57,7 +57,7 @@ def run_cmd(args: Sequence[str], real_time: bool = False):
         if returncode:
             raise RuntimeError(
                 f"error ({returncode}) running command '{' '.join(args)}':\n"
-                + "\n".join(stderr)
+                + "".join(stderr)
             )
 
     def _run_cmd_real_time(proc: subprocess.Popen) -> Iterator[str]:

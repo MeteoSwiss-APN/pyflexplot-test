@@ -35,22 +35,22 @@ def prepare_clone(repo: str, clone_cfg: CloneConfig, cfg: RunConfig) -> Repo:
     _name_ = "main.prepare_clone"
     clone_path = clone_cfg.path
     if cfg.debug:
-        print(f"{_name_}: prepare clone at {clone_path}")
+        print(f"DBG:{_name_}: prepare clone at {clone_path}")
     clone: Optional[Repo] = None
     if clone_path.exists():
         clone = handle_existing_clone(repo, clone_cfg, cfg)
         if clone_cfg.reuse and clone is not None:
             if cfg.debug:
-                print(f"{_name_}: reuse existing clone at {clone_path}")
+                print(f"DBG:{_name_}: reuse existing clone at {clone_path}")
             return clone
     if clone is None:
         if cfg.debug:
-            print(f"{_name_}: clone fresh repo {repo} to {clone_path}")
+            print(f"DBG:{_name_}: clone fresh repo {repo} to {clone_path}")
         clone_path.mkdir(parents=True, exist_ok=True)
         clone = Repo.clone_from(repo, clone_path)
     assert clone is not None  # mypy
     if cfg.debug:
-        print(f"{_name_}: check out rev: {clone_cfg.rev}")
+        print(f"DBG:{_name_}: check out rev: {clone_cfg.rev}")
     clone.git.fetch(all=True)
     clone.git.checkout(clone_cfg.rev)
     if not clone.head.is_detached:
@@ -68,7 +68,7 @@ def handle_existing_clone(
     except InvalidGitRepositoryError:
         if cfg.debug:
             print(
-                f"{_name_}: existing directory at clone path {clone_cfg.path} is not a"
+                f"DBG:{_name_}: existing directory at clone path {clone_cfg.path} is not a"
                 " git repo"
             )
     else:
@@ -78,33 +78,33 @@ def handle_existing_clone(
         if clone.remote().url != repo:
             if cfg.debug:
                 print(
-                    f"{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
+                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
                     f" remote URL doesn't match: {clone.remote().url} != {repo}"
                 )
         elif clone.is_dirty():
             if cfg.debug:
                 print(
-                    f"{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
+                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
                     "it's dirty"
                 )
         elif clone_cfg.reuse:
             if cfg.debug:
-                print(f"{_name_}: reuse existing clone at {clone_cfg.path}")
+                print(f"DBG:{_name_}: reuse existing clone at {clone_cfg.path}")
             return clone
         else:
             if cfg.debug:
                 print(
-                    f"{_name_}: could reuse existing clone at {clone_cfg.path}, but"
+                    f"DBG:{_name_}: could reuse existing clone at {clone_cfg.path}, but"
                     " won't because --reuse-installs or similar has not been passed"
                 )
     is_file_or_not_empty = not clone_cfg.path.is_dir() or any(clone_cfg.path.iterdir())
     if is_file_or_not_empty:
         if not cfg.force:
             if cfg.debug:
-                print(f"{_name_} cannot reuse existing clone at {clone_cfg.path}")
+                print(f"DBG:{_name_} cannot reuse existing clone at {clone_cfg.path}")
             raise PathExistsError(clone_cfg.path)
         if cfg.debug:
-            print(f"{_name_}: remove existing clone at {clone_cfg.path}")
+            print(f"DBG:{_name_}: remove existing clone at {clone_cfg.path}")
         shutil.rmtree(clone_cfg.path)
     return None
 
@@ -154,15 +154,15 @@ def prepare_work_path(wdir_cfg: WorkDirConfig, cfg: RunConfig) -> None:
     if path.exists() and any(path.iterdir()):
         if wdir_cfg.reuse:
             if cfg.debug:
-                print(f"{_name_}: reuse old work dir at {path}")
+                print(f"DBG:{_name_}: reuse old work dir at {path}")
         elif wdir_cfg.replace:
             if cfg.debug:
-                print(f"{_name_}: remove old work dir at {path}")
+                print(f"DBG:{_name_}: remove old work dir at {path}")
             shutil.rmtree(path)
         else:
             if cfg.debug:
                 print(
-                    f"{_name_}: old work dir at {path} is neither to be reused nor"
+                    f"DBG:{_name_}: old work dir at {path} is neither to be reused nor"
                     " replaced"
                 )
             raise PathExistsError(path)
@@ -214,12 +214,14 @@ def create_plots_for_preset(
     expected_plot_names = perform_dry_run(cmd_args_dry, cfg)
     expected_plot_paths = [work_path / name for name in expected_plot_names]
     n_plots = len(expected_plot_names)
+    if n_plots == 0:
+        raise Exception("zero expected plots detected during dry run")
 
     if plot_cfg.reuse:
         n_existing = sum(map(Path.exists, expected_plot_paths))
         if cfg.debug:
             print(
-                f"{_name_}: found {n_existing}/{n_plots} expected plots in {work_path}/"
+                f"DBG:{_name_}: found {n_existing}/{n_plots} expected plots in {work_path}/"
             )
         if n_existing == n_plots:
             print(f"reuse the {n_existing}/{n_plots} expected plots in {work_path}/")
@@ -227,7 +229,7 @@ def create_plots_for_preset(
         elif n_existing == 0:
             if cfg.debug:
                 print(
-                    f"{_name_}: compute plots because none of the {n_plots} expected"
+                    f"DBG:{_name_}: compute plots because none of the {n_plots} expected"
                     f" plots already exist in {work_path}/"
                 )
         else:
@@ -238,10 +240,10 @@ def create_plots_for_preset(
             for path in expected_plot_paths:
                 if not path.exists():
                     if cfg.debug:
-                        print(f"{_name_}: skip non-existing {path}")
+                        print(f"DBG:{_name_}: skip non-existing {path}")
                 else:
                     if cfg.debug:
-                        print(f"{_name_}: remove {path}")
+                        print(f"DBG:{_name_}: remove {path}")
                     path.unlink()
 
     # Perform actual run, using the number of plots to show progress
@@ -284,10 +286,10 @@ def link_data_path(target_path: Path, cfg: RunConfig) -> None:
                 f"data link path {link_path.absolute()} exists and is not a symlink"
             )
         if cfg.debug:
-            print(f"{_name_}: remove existing data link path {link_path}")
+            print(f"DBG:{_name_}: remove existing data link path {link_path}")
         link_path.unlink()
     if cfg.debug:
-        print(f"{_name_}: symlinklink data path {link_path} to {target_path}")
+        print(f"DBG:{_name_}: symlinklink data path {link_path} to {target_path}")
     link_path.symlink_to(target_path)
 
 
@@ -305,7 +307,7 @@ def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> List[str]:
         plot = parse_line_for_plot_name(line, cfg)
         if plot:
             if cfg.debug:
-                print(f"{_name_}: {plot}")
+                print(f"DBG:{_name_}: plot detected: {plot}")
             plots.append(plot)
     if cfg.verbose:
         print(f"expecting {len(plots)} plots to be created")

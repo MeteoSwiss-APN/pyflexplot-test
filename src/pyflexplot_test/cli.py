@@ -254,17 +254,17 @@ def cli(
             print(f"old_rev: {old_rev}")
 
     if cfg.debug:
-        print(f"{_name_}: infiles: {infiles}")
-        print(f"{_name_}: new_data_path: {new_data_path}")
-        print(f"{_name_}: new_presets: {new_presets}")
-        print(f"{_name_}: new_rev: {new_rev}")
-        print(f"{_name_}: num_procs: {num_procs}")
-        print(f"{_name_}: old_data_path: {old_data_path}")
-        print(f"{_name_}: old_presets: {old_presets}")
-        print(f"{_name_}: old_rev: {old_rev}")
-        print(f"{_name_}: only: {only}")
-        print(f"{_name_}: repo_path: {repo_path}")
-        print(f"{_name_}: work_dir_path: {work_dir_path}")
+        print(f"DBG:{_name_}: infiles: {infiles}")
+        print(f"DBG:{_name_}: new_data_path: {new_data_path}")
+        print(f"DBG:{_name_}: new_presets: {new_presets}")
+        print(f"DBG:{_name_}: new_rev: {new_rev}")
+        print(f"DBG:{_name_}: num_procs: {num_procs}")
+        print(f"DBG:{_name_}: old_data_path: {old_data_path}")
+        print(f"DBG:{_name_}: old_presets: {old_presets}")
+        print(f"DBG:{_name_}: old_rev: {old_rev}")
+        print(f"DBG:{_name_}: only: {only}")
+        print(f"DBG:{_name_}: repo_path: {repo_path}")
+        print(f"DBG:{_name_}: work_dir_path: {work_dir_path}")
 
     clones_path = work_dir_path / "git"
     clones_path.mkdir(parents=True, exist_ok=True)
