@@ -7,6 +7,7 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import Union
 
 # Third-party
 import click
@@ -89,13 +90,26 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--infile",
     "infiles",
     help=(
-        "input file (netcdf) overriding that specified in the preset; --infile must not"
-        " be passed more often than --preset; if both --preset and --infile are passed"
-        " more than once, their numbers must match"
+        "input file path overriding the input file specified in the preset;"
+        " incompatible with --infiles-old-new; may be omitted, passed once or passed"
+        " the same number of times as --preset, in which case the infiles and presets"
+        " are paired in order"
     ),
     type=PathlibPath(),
     multiple=True,
-    default=[],
+)
+@click.option(
+    "--infiles-old-new",
+    "infiles_old_new",
+    help=(
+        "pair of input file paths overriding the input file specified in the old and"
+        " new preset, respectively; incompatible with --infile; may be omitted, passed"
+        " once or passed the same number of times as --preset, in which case the infile"
+        " pairs and presets are paired in order"
+    ),
+    nargs=2,
+    type=PathlibPath(),
+    multiple=True,
 )
 @click.option(
     "--new-data",
@@ -206,6 +220,7 @@ def cli(
     ctx: Context,
     data_path: Path,
     infiles: Tuple[Path, ...],
+    infiles_old_new: Tuple[Tuple[Path, Path], ...],
     new_data_path: Optional[Path],
     new_rev: str,
     num_procs: int,
@@ -226,19 +241,17 @@ def cli(
     check_for_active_venv(ctx)
 
     start_path = Path(".").absolute()
-    # SR_TMP <
-    if data_path is None:
-        data_path = Path(DEFAULT_DATA_PATH)
-    # SR_TMP >
     old_data_path, new_data_path = prepare_data_paths(
-        data_path, old_data_path, new_data_path
+        data_path, old_data_path, new_data_path, Path(DEFAULT_DATA_PATH)
     )
+    del data_path
+
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     check_infiles(ctx, infiles, len(old_presets))
-    # SR_TMP < TODO implement --old-infile and --new-infile or --infiles-old-new
-    infiles = tuple([Path(infile).absolute() for infile in infiles])
-    old_infiles, new_infiles = tuple(infiles), tuple(infiles)
-    # SR_TMP >
+    old_infiles, new_infiles = prepare_infiles(
+        ctx, infiles, infiles_old_new, len(old_presets)
+    )
+    del infiles
 
     work_dir_path = work_dir_path.absolute()
 
@@ -254,14 +267,16 @@ def cli(
             print(f"old_rev: {old_rev}")
 
     if cfg.debug:
-        print(f"DBG:{_name_}: infiles: {infiles}")
-        print(f"DBG:{_name_}: new_data_path: {new_data_path}")
-        print(f"DBG:{_name_}: new_presets: {new_presets}")
-        print(f"DBG:{_name_}: new_rev: {new_rev}")
-        print(f"DBG:{_name_}: num_procs: {num_procs}")
         print(f"DBG:{_name_}: old_data_path: {old_data_path}")
+        print(f"DBG:{_name_}: new_data_path: {new_data_path}")
+        print(f"DBG:{_name_}: old_infiles: {old_infiles}")
+        print(f"DBG:{_name_}: new_infiles: {new_infiles}")
         print(f"DBG:{_name_}: old_presets: {old_presets}")
+        print(f"DBG:{_name_}: new_presets: {new_presets}")
         print(f"DBG:{_name_}: old_rev: {old_rev}")
+        print(f"DBG:{_name_}: new_rev: {new_rev}")
+
+        print(f"DBG:{_name_}: num_procs: {num_procs}")
         print(f"DBG:{_name_}: only: {only}")
         print(f"DBG:{_name_}: repo_path: {repo_path}")
         print(f"DBG:{_name_}: work_dir_path: {work_dir_path}")
@@ -311,7 +326,7 @@ def cli(
     )
     old_plot_cfg = PlotConfig(
         data_path=old_data_path,
-        infiles=infiles,  # SR_TMP TODO old-specific infiles
+        infiles=old_infiles,
         num_procs=num_procs,
         only=only,
         presets=old_presets,
@@ -319,7 +334,7 @@ def cli(
     )
     new_plot_cfg = PlotConfig(
         data_path=new_data_path,
-        infiles=infiles,  # SR_TMP TODO new-specific infiles
+        infiles=new_infiles,
         num_procs=num_procs,
         only=only,
         presets=new_presets,
@@ -389,15 +404,66 @@ def prepare_presets(
     return old_presets, new_presets
 
 
+def prepare_infiles(
+    ctx: Context,
+    infiles: Sequence[Path],
+    infiles_old_new: Sequence[Tuple[Path, Path]],
+    n_presets: int,
+    absolute: bool = True,
+) -> Tuple[List[Path], List[Path]]:
+    """Prepare infile paths for old and new revision."""
+    if not infiles and not infiles_old_new:
+        old_infiles = []
+        new_infiles = []
+    elif infiles and not infiles_old_new:
+        if len(infiles) in [1, n_presets]:
+            old_infiles = [Path(infile) for infile in infiles]
+            new_infiles = [Path(infile) for infile in infiles]
+        else:
+            click.echo(
+                f"error: wrong number of --infile: {len(infiles)} neither 1 nor"
+                f" {n_presets} (like --preset/--presets-old-new)",
+                file=sys.stderr,
+            )
+            ctx.exit(1)
+    elif infiles_old_new and not infiles:
+        if len(infiles_old_new) in [1, n_presets]:
+            old_infiles = [Path(old_infile) for old_infile, _ in infiles_old_new]
+            new_infiles = [Path(new_infile) for _, new_infile in infiles_old_new]
+        else:
+            click.echo(
+                f"error: wrong number of --infiles-old-new: {len(infiles_old_new)}"
+                f" neither 1 nor {n_presets} (like --preset/--presets-old-new)",
+                file=sys.stderr,
+            )
+            ctx.exit(1)
+    else:
+        click.echo(
+            "error: --infile and --infiles-old-new are incompatible", file=sys.stderr
+        )
+        ctx.exit(1)
+    if absolute:
+        old_infiles = [path.absolute() for path in old_infiles]
+        new_infiles = [path.absolute() for path in new_infiles]
+    return (old_infiles, new_infiles)
+
+
 def prepare_data_paths(
-    path: Optional[Path], old_path: Optional[Path], new_path: Optional[Path]
-) -> Tuple[Path, Path]:
-    assert path is not None  # mypy  # SR_TMP
-    if old_path is None:
-        old_path = path
-    if new_path is None:
-        new_path = path
-    return old_path.absolute(), new_path.absolute()
+    path: Optional[Path],
+    old_path: Optional[Path],
+    new_path: Optional[Path],
+    default_path: Path,
+    absolute: bool = True,
+) -> Union[Tuple[Path, Path], Tuple[None, None]]:
+    if (path, old_path, new_path) == (None, None, None):
+        return None, None
+    else:
+        old_path = old_path or path or default_path
+        new_path = new_path or path or default_path
+    if absolute:
+        old_path = old_path.absolute()
+        new_path = new_path.absolute()
+    return (old_path, new_path)
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
