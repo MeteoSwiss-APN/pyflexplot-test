@@ -309,8 +309,14 @@ def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> List[str]:
     return plots
 
 
-def parse_line_for_plot_name(line: str) -> Optional[str]:
-    match = re.match(r"\b[^ ]+ -> (?P<path>[^ ]+)\b", line)
+def parse_line_for_plot_name(line: str, cfg: RunConfig) -> Optional[str]:
+    _name_ = "parse_line_for_plot_name"
+    expr = r"^[^ ]+ -> (?P<path>[^ ]+)$"
+    match = re.match(expr, line)
+    if cfg.debug:
+        print(
+            f"DBG:{_name_}: '{expr}' {'' if match else 'not '} matched by line '{line}'"
+        )
     return match.group("path") if match else None
 
 
