@@ -68,8 +68,8 @@ def handle_existing_clone(
     except InvalidGitRepositoryError:
         if cfg.debug:
             print(
-                f"DBG:{_name_}: existing directory at clone path {clone_cfg.path} is not a"
-                " git repo"
+                f"DBG:{_name_}: existing directory at clone path {clone_cfg.path} is"
+                " not a git repo"
             )
     else:
         # Check whether the repo is our target repo based on the origin url
@@ -78,14 +78,14 @@ def handle_existing_clone(
         if clone.remote().url != repo:
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
-                    f" remote URL doesn't match: {clone.remote().url} != {repo}"
+                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path}"
+                    f" because remote URL doesn't match: {clone.remote().url} != {repo}"
                 )
         elif clone.is_dirty():
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path} because"
-                    "it's dirty"
+                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path}"
+                    " because it's dirty"
                 )
         elif clone_cfg.reuse:
             if cfg.debug:
@@ -221,7 +221,8 @@ def create_plots_for_preset(
         n_existing = sum(map(Path.exists, expected_plot_paths))
         if cfg.debug:
             print(
-                f"DBG:{_name_}: found {n_existing}/{n_plots} expected plots in {work_path}/"
+                f"DBG:{_name_}: found {n_existing}/{n_plots} expected plots in"
+                f" {work_path}/"
             )
         if n_existing == n_plots:
             print(f"reuse the {n_existing}/{n_plots} expected plots in {work_path}/")
@@ -229,8 +230,8 @@ def create_plots_for_preset(
         elif n_existing == 0:
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: compute plots because none of the {n_plots} expected"
-                    f" plots already exist in {work_path}/"
+                    f"DBG:{_name_}: compute plots because none of the {n_plots}"
+                    f" expected plots already exist in {work_path}/"
                 )
         else:
             print(
