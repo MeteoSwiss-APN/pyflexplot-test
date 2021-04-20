@@ -51,7 +51,7 @@ class CloneConfig:
 @dc.dataclass
 class PlotConfig:
     data_path: Optional[Path]
-    infiles: Sequence[str]
+    infiles: Sequence[Path]
     num_procs: int
     only: Optional[int]
     presets: Sequence[str]

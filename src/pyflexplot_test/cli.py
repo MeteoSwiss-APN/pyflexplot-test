@@ -26,6 +26,8 @@ from .main import prepare_clone
 from .main import prepare_work_path as _prepare_work_path_core
 from .utils import git_get_remote_tags
 
+DEFAULT_DATA_PATH = "data"
+
 
 class PathlibPath(click.ParamType):
     name = "Path"
@@ -47,7 +49,7 @@ def check_for_active_venv(ctx: Context) -> None:
     ctx.exit(1)
 
 
-def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
+def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None:
     n_in = len(infiles)
     if n_in > n_presets:
         click.echo(
@@ -69,9 +71,12 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
 @click.option(
     "--data",
     "data_path",
-    help="path to data directory; overridden by --old-data and --new-data",
+    help=(
+        f"path to data directory; defaults to {DEFAULT_DATA_PATH}; overridden by"
+        " --old-data and --new-data; ignored if --infile and/or --infiles-old-new are"
+        " passed"
+    ),
     type=PathlibPath(),
-    default="data",
 )
 @click.option(
     "-f",
@@ -88,13 +93,17 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
         " be passed more often than --preset; if both --preset and --infile are passed"
         " more than once, their numbers must match"
     ),
+    type=PathlibPath(),
     multiple=True,
     default=[],
 )
 @click.option(
     "--new-data",
     "new_data_path",
-    help="path to data directory for --old-rev; overrides or defaults to --data",
+    help=(
+        "path to data directory for --old-rev; overrides or defaults to --data;"
+        " ignored if --infile and/or --infiles-old-new are passed"
+    ),
     type=PathlibPath(),
     default=None,
 )
@@ -116,7 +125,10 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
 @click.option(
     "--old-data",
     "old_data_path",
-    help="path to data directory for --new-rev; overrides or defaults to --data",
+    help=(
+        "path to data directory for --new-rev; overrides or defaults to --data;"
+        " ignored if --infile and/or --infiles-old-new are passed"
+    ),
     type=PathlibPath(),
     default=None,
 )
@@ -193,7 +205,7 @@ def check_infiles(ctx: Context, infiles: Sequence[str], n_presets: int) -> None:
 def cli(
     ctx: Context,
     data_path: Path,
-    infiles: Tuple[str, ...],
+    infiles: Tuple[Path, ...],
     new_data_path: Optional[Path],
     new_rev: str,
     num_procs: int,
@@ -214,12 +226,19 @@ def cli(
     check_for_active_venv(ctx)
 
     start_path = Path(".").absolute()
+    # SR_TMP <
+    if data_path is None:
+        data_path = Path(DEFAULT_DATA_PATH)
+    # SR_TMP >
     old_data_path, new_data_path = prepare_data_paths(
         data_path, old_data_path, new_data_path
     )
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     check_infiles(ctx, infiles, len(old_presets))
-    infiles = tuple([str(Path(infile).absolute()) for infile in infiles])
+    # SR_TMP < TODO implement --old-infile and --new-infile or --infiles-old-new
+    infiles = tuple([Path(infile).absolute() for infile in infiles])
+    old_infiles, new_infiles = tuple(infiles), tuple(infiles)
+    # SR_TMP >
 
     work_dir_path = work_dir_path.absolute()
 
@@ -371,10 +390,9 @@ def prepare_presets(
 
 
 def prepare_data_paths(
-    path: Path, old_path: Optional[Path], new_path: Optional[Path]
+    path: Optional[Path], old_path: Optional[Path], new_path: Optional[Path]
 ) -> Tuple[Path, Path]:
-    if path is None:
-        raise ValueError("path must not be None")
+    assert path is not None  # mypy  # SR_TMP
     if old_path is None:
         old_path = path
     if new_path is None:

@@ -13,6 +13,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Sequence
+from typing import Tuple
 from typing import Union
 
 # Third-party
@@ -130,8 +131,8 @@ def install_exe(
     return exe_path
 
 
-def zip_presets_infiles(plot_cfg):
-    infiles: Sequence[Optional[str]]
+def zip_presets_infiles(plot_cfg) -> Iterator[Tuple[str, Optional[Path]]]:
+    infiles: Sequence[Optional[Path]]
     n_pre = len(plot_cfg.presets)
     n_in = len(plot_cfg.infiles)
     if n_in == 0:
@@ -187,12 +188,12 @@ def create_plots_for_preset(
     exe_path: Path,
     work_path: Path,
     preset: str,
-    infile: Optional[str],
+    infile: Optional[Path],
     plot_cfg: PlotConfig,
     cfg: RunConfig,
 ) -> List[Path]:
     """Create plots for an individual preset."""
-    _name_ = "main.create_plots_preset"
+    _name_ = "main.create_plots_for_preset"
     os.chdir(work_path)
     if plot_cfg.data_path:
         link_data_path(plot_cfg.data_path, cfg)
@@ -203,7 +204,7 @@ def create_plots_for_preset(
         f"--preset={preset}",
     ]
     if infile:
-        cmd_args += ["--setup", "infile", infile]
+        cmd_args += ["--setup", "infile", str(infile)]
     if plot_cfg.only:
         cmd_args += [f"--only={plot_cfg.only}"]
     cmd_args_dry = cmd_args + ["--dry-run"]
@@ -250,8 +251,8 @@ def create_plots_for_preset(
     i_plot = 0
     for i_line, line in enumerate(run_cmd(cmd_args, real_time=True)):
         if cfg.debug:
-            print(f"{_name_}: line {i_line}: {line}")
-        plot_name = parse_line_for_plot_name(line)
+            print(f"DBG:{_name_}: line {i_line}: {line}")
+        plot_name = parse_line_for_plot_name(line, cfg)
         if not plot_name:
             continue
         plot_path = work_path / plot_name
@@ -299,7 +300,9 @@ def perform_dry_run(cmd_args_dry: List[str], cfg: RunConfig) -> List[str]:
         )
     plots: List[str] = []
     for line in run_cmd(cmd_args_dry, real_time=True):
-        plot = parse_line_for_plot_name(line)
+        if cfg.debug:
+            print(f"DBG:{_name_}: {line}")
+        plot = parse_line_for_plot_name(line, cfg)
         if plot:
             if cfg.debug:
                 print(f"{_name_}: {plot}")
@@ -497,7 +500,7 @@ class PlotPairSequence:
 
         """
         if len(self) == 0:
-            print("error: no pairs of plots to compate")
+            print("error: no pairs of plots to compute")
             return []
         print(f"comparing {len(self)} pairs of plots:")
         diff_paths: List[Path] = []
