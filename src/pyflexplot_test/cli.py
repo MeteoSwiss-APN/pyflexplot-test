@@ -20,7 +20,7 @@ from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
 from .exceptions import PathExistsError
-from .main import create_plots as _create_plots_core
+from .main import create_plots
 from .main import install_exe
 from .main import PlotPairSequence
 from .main import prepare_clone
@@ -202,8 +202,27 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     default=None,
 )
 @click.option(
-    "--reuse-plots/--recompute-plots",
-    help="reuse existing plots rather than recomputing them",
+    "--reuse-new-plots/--replot-new",
+    help=(
+        "reuse existing new plots rather than recomputing them; overrides"
+        " --reuse-plots/--replot for new plots"
+    ),
+    default=None,
+)
+@click.option(
+    "--reuse-old-plots/--replot-old",
+    help=(
+        "reuse existing old plots rather than recomputing them; overrides"
+        " --reuse-plots/--replot for old plots"
+    ),
+    default=None,
+)
+@click.option(
+    "--reuse-plots/--replot",
+    help=(
+        "reuse existing plots rather than recomputing them; overridden by"
+        " --reuse-(old|new)-plots/--replot-(old|new)"
+    ),
     default=False,
 )
 @click.option(
@@ -245,6 +264,8 @@ def cli(
     reuse_installs: bool,
     reuse_new_install: Optional[bool],
     reuse_old_install: Optional[bool],
+    reuse_new_plots: Optional[bool],
+    reuse_old_plots: Optional[bool],
     reuse_plots: bool,
     work_dir_path: Path,
     **cfg_kwargs,
@@ -254,12 +275,16 @@ def cli(
 
     check_for_active_venv(ctx)
 
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare data paths")
     start_path = Path(".").absolute()
     old_data_path, new_data_path = prepare_data_paths(
         data_path, old_data_path, new_data_path, Path(DEFAULT_DATA_PATH)
     )
     del data_path
 
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare presets")
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     check_infiles(ctx, infiles, len(old_presets))
     old_infiles, new_infiles = prepare_infiles(
@@ -267,13 +292,22 @@ def cli(
     )
     del infiles
 
-    reuse_old_install, reuse_new_install = prepare_reuse_installs(
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare install reuse flags")
+    reuse_old_install, reuse_new_install = prepare_reuse(
         reuse_installs, reuse_old_install, reuse_new_install
     )
     del reuse_installs
 
-    work_dir_path = work_dir_path.absolute()
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare plot reuse flags")
+    reuse_old_plots, reuse_new_plots = prepare_reuse(
+        reuse_plots, reuse_old_plots, reuse_new_plots
+    )
+    del reuse_plots
 
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare old rev")
     if old_rev is None:
         if cfg.verbose:
             print(f"obtain old_rev from repo {repo_path}")
@@ -285,40 +319,42 @@ def cli(
         if cfg.verbose:
             print(f"old_rev: {old_rev}")
 
+    if cfg.verbose:
+        print("+" * 40)
+        print("{:20}: {}".format("old_data_path", old_data_path))
+        print("{:20}: {}".format("new_data_path", new_data_path))
+        print("{:20}: {}".format("old_infiles", list(map(str, old_infiles))))
+        print("{:20}: {}".format("new_infiles", list(map(str, new_infiles))))
+        print("{:20}: {}".format("old_presets", old_presets))
+        print("{:20}: {}".format("new_presets", new_presets))
+        print("{:20}: {}".format("old_rev", old_rev))
+        print("{:20}: {}".format("new_rev", new_rev))
+        #
+        print("{:20}: {}".format("num_procs", num_procs))
+        print("{:20}: {}".format("only", only))
+        print("{:20}: {}".format("repo_path", repo_path))
+        print("{:20}: {}".format("work_dir_path", work_dir_path))
+        print("+" * 40)
+
     if cfg.debug:
-        print(f"DBG:{_name_}: old_data_path: {old_data_path}")
-        print(f"DBG:{_name_}: new_data_path: {new_data_path}")
-        print(f"DBG:{_name_}: old_infiles: {old_infiles}")
-        print(f"DBG:{_name_}: new_infiles: {new_infiles}")
-        print(f"DBG:{_name_}: old_presets: {old_presets}")
-        print(f"DBG:{_name_}: new_presets: {new_presets}")
-        print(f"DBG:{_name_}: old_rev: {old_rev}")
-        print(f"DBG:{_name_}: new_rev: {new_rev}")
-
-        print(f"DBG:{_name_}: num_procs: {num_procs}")
-        print(f"DBG:{_name_}: only: {only}")
-        print(f"DBG:{_name_}: repo_path: {repo_path}")
-        print(f"DBG:{_name_}: work_dir_path: {work_dir_path}")
-
+        print(f"DBG:{_name_}: prepare paths")
+    work_dir_path = work_dir_path.absolute()
     clones_path = work_dir_path / "git"
-    clones_path.mkdir(parents=True, exist_ok=True)
-
     old_clones_path = clones_path / old_rev
     new_clones_path = clones_path / new_rev
-
     old_work_path = work_dir_path / "work" / old_rev
     new_work_path = work_dir_path / "work" / new_rev
-
     diffs_path = work_dir_path / "work" / f"{old_rev}_vs_{new_rev}"
+    clones_path.mkdir(parents=True, exist_ok=True)
     diffs_path.mkdir(parents=True, exist_ok=True)
 
     old_wdir_cfg = WorkDirConfig(
         path=old_work_path,
-        reuse=reuse_plots,
+        reuse=reuse_old_plots,
     )
     new_wdir_cfg = WorkDirConfig(
         path=new_work_path,
-        reuse=reuse_plots,
+        reuse=reuse_new_plots,
     )
     # Note: This always replaces all diff plots, even if a rerun is made with
     # fewer presets than a previous runs, in which case the diff plots of the
@@ -347,7 +383,7 @@ def cli(
         num_procs=num_procs,
         only=only,
         presets=old_presets,
-        reuse=reuse_plots,  # SR_TMP TODO old-specific reuse
+        reuse=reuse_old_plots,
     )
     new_plot_cfg = PlotConfig(
         data_path=new_data_path,
@@ -355,35 +391,49 @@ def cli(
         num_procs=num_procs,
         only=only,
         presets=new_presets,
-        reuse=reuse_plots,  # SR_TMP TODO new-specific reuse
+        reuse=reuse_new_plots,
     )
 
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: prepare old executable")
     old_exe_path = prepare_exe(
         ctx, repo_path=repo_path, case="old", clone_cfg=old_clone_cfg, cfg=cfg
     )
+
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: prepare new executable")
     new_exe_path = prepare_exe(
         ctx, repo_path=repo_path, case="new", clone_cfg=new_clone_cfg, cfg=cfg
     )
 
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: prepare work dirs")
     prepare_work_path(ctx, "old work dir", old_wdir_cfg, cfg)
     prepare_work_path(ctx, "new work dir", new_wdir_cfg, cfg)
     prepare_work_path(ctx, "diffs dir", diffs_wdir_cfg, cfg)
 
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: create old plots")
+    print(f"prepare old plots in {old_exe_path}")
     old_plot_paths = create_plots(
-        "old", old_exe_path, old_clone_cfg.wdir.path, old_plot_cfg, cfg
-    )
-    new_plot_paths = create_plots(
-        "new", new_exe_path, new_clone_cfg.wdir.path, new_plot_cfg, cfg
+        old_exe_path, old_clone_cfg.wdir.path, old_plot_cfg, cfg
     )
 
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: create new plots")
+    print(f"prepare new plots in {new_exe_path}")
+    new_plot_paths = create_plots(
+        new_exe_path, new_clone_cfg.wdir.path, new_plot_cfg, cfg
+    )
+
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: compare plots")
     plot_pairs = PlotPairSequence(
         paths1=old_plot_paths,
         paths2=new_plot_paths,
         base1=old_clone_cfg.wdir.path,
         base2=new_clone_cfg.wdir.path,
     )
-
-    # Compare plots
     diff_plot_paths = plot_pairs.compare(diffs_path, cfg)
     if diff_plot_paths:
         print(
@@ -483,16 +533,14 @@ def prepare_data_paths(
     return old_path, new_path
 
 
-def prepare_reuse_installs(
-    reuse_installs: bool,
-    reuse_old_install: Optional[bool],
-    reuse_new_install: Optional[bool],
+def prepare_reuse(
+    reuse: bool, reuse_old: Optional[bool], reuse_new: Optional[bool]
 ) -> Tuple[bool, bool]:
-    if reuse_old_install is None:
-        reuse_old_install = reuse_installs
-    if reuse_new_install is None:
-        reuse_new_install = reuse_installs
-    return reuse_old_install, reuse_new_install
+    if reuse_old is None:
+        reuse_old = reuse
+    if reuse_new is None:
+        reuse_new = reuse
+    return reuse_old, reuse_new
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
@@ -533,10 +581,3 @@ def prepare_work_path(
             file=sys.stderr,
         )
         ctx.exit(1)
-
-
-def create_plots(
-    case: str, exe_path: Path, work_path: Path, plot_cfg: PlotConfig, cfg: RunConfig
-) -> List[Path]:
-    print(f"prepare {case} plots in {work_path}")
-    return _create_plots_core(exe_path, work_path, plot_cfg, cfg)

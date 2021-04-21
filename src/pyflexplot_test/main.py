@@ -206,14 +206,16 @@ def create_plots_for_preset(
     n_plots = len(expected_plot_names)
     if n_plots == 0:
         raise Exception("zero expected plots detected during dry run")
+    n_existing = sum(map(Path.exists, expected_plot_paths))
+    if cfg.debug:
+        print(
+            f"DBG:{_name_}: found {n_existing}/{n_plots} expected plots in"
+            f" {work_path}/"
+        )
 
     if plot_cfg.reuse:
-        n_existing = sum(map(Path.exists, expected_plot_paths))
         if cfg.debug:
-            print(
-                f"DBG:{_name_}: found {n_existing}/{n_plots} expected plots in"
-                f" {work_path}/"
-            )
+            print(f"DBG:{_name_}: check whether existing plots can be reused")
         if n_existing == n_plots:
             print(f"reuse the {n_existing}/{n_plots} expected plots in {work_path}/")
             return expected_plot_paths
