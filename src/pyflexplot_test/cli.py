@@ -18,6 +18,7 @@ from .config import CloneConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
+from .main import animate_diff_plots
 from .main import create_plots
 from .main import install_exe
 from .main import PlotPairSequence
@@ -443,11 +444,15 @@ def cli(
         if cfg.debug:
             print(f"DBG:{_name_}: create composite diff plot")
         composite_diff_plot = plot_pairs.create_composite_diff(diffs_path, cfg)
-        print(f"\n{n_diff} new diff plots in {diffs_path.relative_to(start_path)}/")
+        animated_diff_plot = animate_diff_plots(diffs_path, diff_plot_paths, cfg)
+        print()
+        print(f"{n_diff} new diff plots in {diffs_path.relative_to(start_path)}/")
         if cfg.verbose:
             for path in diff_plot_paths:
                 print(path.relative_to(start_path))
-        print(f"\ndiff composite: {composite_diff_plot.relative_to(start_path)}")
+        print()
+        print(f"diff composite: {composite_diff_plot.relative_to(start_path)}")
+        print(f"diff animation: {animated_diff_plot.relative_to(start_path)}")
 
 
 def prepare_presets(

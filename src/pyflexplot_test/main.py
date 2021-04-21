@@ -689,3 +689,35 @@ class PlotPairSequence:
 
         run("paths2", paths2, base2, "paths1", paths1, base1)
         run("paths1", paths1, base1, "paths2", paths2, base2)
+
+
+def animate_diff_plots(
+    diffs_path: Path,
+    diff_plot_paths: Sequence[Path],
+    cfg: RunConfig,
+    *,
+    delay: int = 80,
+) -> Path:
+    """Animate diff plots."""
+    _name_ = "animate_diff_plots"
+    if not diff_plot_paths:
+        raise ValueError("missing diff plots to create composite diff plot")
+    n_diffs = len(diff_plot_paths)
+    anim_path = diffs_path / f"animated_diff_{n_diffs}x.gif"
+    cmd_args = (
+        [f"convert -delay {delay}"] + list(map(str, diff_plot_paths)) + [str(anim_path)]
+    )
+    if cfg.verbose:
+        print(f"create animation of {n_diffs} diff plots: {anim_path}")
+    if cfg.debug:
+        print(
+            f"DBG:{_name_}: create diff animation plot with following command:"
+            + ("\n$ " + " \\\n    ".join(cmd_args))
+        )
+    cmd_args = [sub_arg for arg in cmd_args for sub_arg in arg.split()]
+    try:
+        run_cmd(cmd_args)
+    # pylint: disable=W0703  # broad-except
+    except Exception as e:
+        raise Exception(f"error creating diff animation plot {anim_path}:\n{e}") from e
+    return anim_path
