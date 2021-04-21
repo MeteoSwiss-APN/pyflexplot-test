@@ -585,7 +585,13 @@ class PlotPairSequence:
                 + ("\n$ " + " \\\n    ".join(cmd_args))
             )
         cmd_args = [sub_arg for arg in cmd_args for sub_arg in arg.split()]
-        run_cmd(cmd_args)
+        try:
+            run_cmd(cmd_args)
+        # pylint: disable=W0703  # broad-except
+        except Exception as e:
+            raise Exception(
+                f"error creating composite diff plot {composite_path}:\n{e}"
+            ) from e
         if cfg.verbose:
             print(f"remove {len(diff_paths)} raw diff plots")
         for path in diff_paths:
