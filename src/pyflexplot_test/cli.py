@@ -431,16 +431,19 @@ def cli(
         base1=old_clone_cfg.wdir.path,
         base2=new_clone_cfg.wdir.path,
     )
-    diff_plot_paths = plot_pairs.compare(diffs_path, cfg)
+    diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg)
     n_plots = len(plot_pairs)
     n_diff = len(diff_plot_paths)
     print(f"{n_diff}/{n_plots} ({n_diff / n_plots:.0%}) plot pairs differ")
     if diff_plot_paths:
-        print(f"\n{n_diff} new diff plots: {diffs_path.relative_to(start_path)}/")
+        if cfg.debug:
+            print(f"DBG:{_name_}: create composite diff plot")
+        composite_diff_plot = plot_pairs.create_composite_diff(diffs_path, cfg)
+        print(f"\n{n_diff} new diff plots in {diffs_path.relative_to(start_path)}/")
         if cfg.verbose:
-            print()
             for path in diff_plot_paths:
                 print(path.relative_to(start_path))
+        print(f"\ndiff composite: {composite_diff_plot.relative_to(start_path)}")
 
 
 def prepare_presets(

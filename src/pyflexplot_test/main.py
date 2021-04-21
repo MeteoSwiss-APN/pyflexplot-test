@@ -367,12 +367,13 @@ class PlotPair:
     def rel_path2(self) -> Path:
         return self.path2.relative_to(self.shared_root)
 
-    def compare(
+    def create_diff(
         self,
         diffs_path: Optional[Union[Path, str]] = None,
         cfg: RunConfig = RunConfig(),
+        raw: bool = False,
     ) -> Optional[Path]:
-        _name_ = f"{__name__}.{type(self).__name__}.compare"
+        _name_ = f"{__name__}.{type(self).__name__}.create_diff"
         if cfg.debug:
             print(f"DBG:{_name_}: comparing pair {self.shared_base}")
         if filecmp.cmp(self.path1, self.path2):
@@ -385,24 +386,35 @@ class PlotPair:
             diff_path = self.shared_base
             if diffs_path:
                 diff_path = Path(diffs_path) / diff_path
+            if raw:
+                # Add '-raw' before suffix, e.g., a.png -> a-raw.png
+                diff_path = diff_path.parent / Path(
+                    re.sub(r"(.\w+$)", r"-raw\1", diff_path.name)
+                )
             if self._equal_sized():
-                self._compare_equal_sized(diff_path, cfg)
+                self._compare_equal_sized(diff_path, cfg, raw)
             else:
-                self._compare_unequal_sized(diff_path, cfg)
+                self._compare_unequal_sized(diff_path, cfg, raw)
             return diff_path
 
-    def _compare_equal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
-        _name_ = "_compare_equal_sized"
-        cmd_args = ["compare", str(self.path1), str(self.path2), str(diff_path)]
+    def _compare_equal_sized(self, diff_path: Path, cfg: RunConfig, raw: bool) -> None:
+        _name_ = f"{__name__}.{type(self).__name__}._compare_equal_sized"
+        cmd_args = ["compare", str(self.path1), str(self.path2)]
+        if raw:
+            cmd_args += ["-compose src -highlight-color red"]
+        cmd_args += [str(diff_path)]
         if cfg.debug:
             print(
                 f"DBG:{_name_}: create diff plot with following command:\n$ "
                 + " \\\n    ".join(cmd_args)
             )
+        cmd_args = [sub_arg for arg in cmd_args for sub_arg in arg.split()]
         run_cmd(cmd_args)
 
-    def _compare_unequal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
-        _name_ = "main._compare_unequal_sized"
+    def _compare_unequal_sized(
+        self, diff_path: Path, cfg: RunConfig, raw: bool
+    ) -> None:
+        _name_ = f"{__name__}.{type(self).__name__}._compare_unequal_sized"
         w1 = int(self._identify(self.path1, fmt="%[w]", trim=True))
         w2 = int(self._identify(self.path2, fmt="%[w]", trim=True))
         h1 = int(self._identify(self.path1, fmt="%[h]", trim=True))
@@ -420,7 +432,10 @@ class PlotPair:
         args_path1 = f"( {args_prep} {str(self.path1)} )"
         args_path2 = f"( {args_prep} {str(self.path2)} )"
         cmd_prep = f"convert {args_path1} {args_path2} miff:-"
-        cmd_comp = f"compare miff:- {diff_path}"
+        cmd_comp = "compare miff:-"
+        if raw:
+            cmd_comp += " -compose src -highlight-color red"
+        cmd_comp += f" {diff_path}"
         cmd = " | ".join([cmd_prep, cmd_comp])
         if cfg.debug:
             print(f"DBG:{_name_}: creating diff plot with following command:\n$ {cmd}")
@@ -494,25 +509,27 @@ class PlotPairSequence:
             for old_path, new_path in zip(paths1, paths2)
         ]
 
-    def compare(self, diffs_path: Path, cfg: RunConfig) -> List[Path]:
-        """Compare the pairs of plots.
-
-        For pairs that differ, diff plots showing the differences are created.
+    def create_diffs(
+        self, diffs_path: Path, cfg: RunConfig, raw: bool = False
+    ) -> List[Path]:
+        """Create difference plots for those pairs that differ.
 
         Args:
             diffs_path: Path where diff plots are saved.
 
             cfg: Run configuration.
 
+            raw (optional): Only return raw diff mask.
+
         """
         if len(self) == 0:
-            print("error: no pairs of plots to compute")
+            print("warning: no pairs of plots to create diff plots")
             return []
         print(f"compare {len(self)} pairs of plots")
         diff_paths: List[Path] = []
         for pair in self:
             try:
-                diff_path = pair.compare(diffs_path, cfg)
+                diff_path = pair.create_diff(diffs_path, cfg, raw=raw)
             # pylint: disable=W0703  # broad-except
             except Exception:
                 print("-" * 50, file=sys.stderr)
@@ -526,6 +543,42 @@ class PlotPairSequence:
             if diff_path is not None:
                 diff_paths.append(diff_path)
         return diff_paths
+
+    def create_composite_diff(self, diffs_path: Path, cfg: RunConfig) -> Path:
+        """Create composite difference plot for those pairs that differ.
+
+        Args:
+            diffs_path: Path where diff plots are saved.
+
+            cfg: Run configuration.
+
+        """
+        _name_ = f"{__name__}.{type(self).__name__}.create_composite_diff"
+        diff_paths = self.create_diffs(diffs_path, cfg, raw=True)
+        if not diff_paths:
+            raise Exception("missing diff plots to create composite diff plot")
+        composite_path = diffs_path / f"composite_diff_{len(diff_paths)}x.png"
+        cmd_args = (
+            ["composite"]
+            + list(map(str, diff_paths))
+            + ["-compose src", str(composite_path)]
+        )
+        if cfg.verbose:
+            print(f"create composite of {len(diff_paths)} diff plots: {composite_path}")
+        if cfg.debug:
+            print(
+                f"DBG:{_name_}: create composite raw diff plot with following command:"
+                + ("\n$ " + " \\\n    ".join(cmd_args))
+            )
+        cmd_args = [sub_arg for arg in cmd_args for sub_arg in arg.split()]
+        run_cmd(cmd_args)
+        if cfg.verbose:
+            print(f"remove {len(diff_paths)} raw diff plots")
+        for path in diff_paths:
+            if cfg.debug:
+                print(f"DBG:{_name_}: remove {path}")
+            path.unlink()
+        return composite_path
 
     def __iter__(self) -> Iterator[PlotPair]:
         return iter(self.pairs)
