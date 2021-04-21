@@ -238,8 +238,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     message="%(version)s",
 )
 @click.option(
-    "--work-dir",
-    "work_dir_path",
+    "--work",
+    "wdir_path",
     help="working directory",
     default="pyflexplot-test",
     type=PathlibPath(),
@@ -267,7 +267,7 @@ def cli(
     reuse_new_plots: Optional[bool],
     reuse_old_plots: Optional[bool],
     reuse_plots: bool,
-    work_dir_path: Path,
+    wdir_path: Path,
     **cfg_kwargs,
 ) -> None:
     _name_ = "cli.cli"
@@ -333,18 +333,18 @@ def cli(
         print("{:20}: {}".format("num_procs", num_procs))
         print("{:20}: {}".format("only", only))
         print("{:20}: {}".format("repo_path", repo_path))
-        print("{:20}: {}".format("work_dir_path", work_dir_path))
+        print("{:20}: {}".format("wdir_path", wdir_path))
         print("+" * 40)
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare paths")
-    work_dir_path = work_dir_path.absolute()
-    clones_path = work_dir_path / "git"
+    wdir_path = wdir_path.absolute()
+    clones_path = wdir_path / "git"
     old_clones_path = clones_path / old_rev
     new_clones_path = clones_path / new_rev
-    old_work_path = work_dir_path / "work" / old_rev
-    new_work_path = work_dir_path / "work" / new_rev
-    diffs_path = work_dir_path / "work" / f"{old_rev}_vs_{new_rev}"
+    old_work_path = wdir_path / "work" / old_rev
+    new_work_path = wdir_path / "work" / new_rev
+    diffs_path = wdir_path / "work" / f"{old_rev}_vs_{new_rev}"
     clones_path.mkdir(parents=True, exist_ok=True)
     diffs_path.mkdir(parents=True, exist_ok=True)
 
