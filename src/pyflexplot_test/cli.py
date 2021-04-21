@@ -80,13 +80,6 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     type=PathlibPath(),
 )
 @click.option(
-    "-f",
-    "--force",
-    help="overwrite existing repos etc.",
-    is_flag=True,
-    default=False,
-)
-@click.option(
     "--infile",
     "infiles",
     help=(
@@ -186,8 +179,27 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 )
 @click.option(
     "--reuse-installs/--reinstall",
-    help="reuse venvs of existing repo clones instead of reinstalling",
+    help=(
+        "reuse venvs of existing repo clones instead of reinstalling them; overridden"
+        "by --reuse-(old|new)-install/--reinstall-(old|new)"
+    ),
     default=False,
+)
+@click.option(
+    "--reuse-new-install/--reinstall-new",
+    help=(
+        "reuse venv of existing clones of new repo instead of reinstalling it;"
+        " overrides --reuse-installs/--reinstall for new repo"
+    ),
+    default=None,
+)
+@click.option(
+    "--reuse-old-install/--reinstall-old",
+    help=(
+        "reuse venv of existing clones of old repo instead of reinstalling it;"
+        " overrides --reuse-installs/--reinstall for old repo"
+    ),
+    default=None,
 )
 @click.option(
     "--reuse-plots/--recompute-plots",
@@ -231,6 +243,8 @@ def cli(
     presets: Tuple[str, ...],
     repo_path: str,
     reuse_installs: bool,
+    reuse_new_install: Optional[bool],
+    reuse_old_install: Optional[bool],
     reuse_plots: bool,
     work_dir_path: Path,
     **cfg_kwargs,
@@ -252,6 +266,11 @@ def cli(
         ctx, infiles, infiles_old_new, len(old_presets)
     )
     del infiles
+
+    reuse_old_install, reuse_new_install = prepare_reuse_installs(
+        reuse_installs, reuse_old_install, reuse_new_install
+    )
+    del reuse_installs
 
     work_dir_path = work_dir_path.absolute()
 
@@ -296,12 +315,10 @@ def cli(
     old_wdir_cfg = WorkDirConfig(
         path=old_work_path,
         reuse=reuse_plots,
-        replace=cfg.force,
     )
     new_wdir_cfg = WorkDirConfig(
         path=new_work_path,
         reuse=reuse_plots,
-        replace=cfg.force,
     )
     # Note: This always replaces all diff plots, even if a rerun is made with
     # fewer presets than a previous runs, in which case the diff plots of the
@@ -315,13 +332,13 @@ def cli(
     old_clone_cfg = CloneConfig(
         path=old_clones_path,
         rev=old_rev,
-        reuse=reuse_installs,
+        reuse=reuse_old_install,
         wdir=old_wdir_cfg,
     )
     new_clone_cfg = CloneConfig(
         path=new_clones_path,
         rev=new_rev,
-        reuse=reuse_installs,
+        reuse=reuse_new_install,
         wdir=new_wdir_cfg,
     )
     old_plot_cfg = PlotConfig(
@@ -463,7 +480,19 @@ def prepare_data_paths(
     if absolute:
         old_path = old_path.absolute()
         new_path = new_path.absolute()
-    return (old_path, new_path)
+    return old_path, new_path
+
+
+def prepare_reuse_installs(
+    reuse_installs: bool,
+    reuse_old_install: Optional[bool],
+    reuse_new_install: Optional[bool],
+) -> Tuple[bool, bool]:
+    if reuse_old_install is None:
+        reuse_old_install = reuse_installs
+    if reuse_new_install is None:
+        reuse_new_install = reuse_installs
+    return reuse_old_install, reuse_new_install
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
@@ -482,7 +511,7 @@ def prepare_exe(
     except PathExistsError as e:
         click.echo(
             f"error: preparing {case} clone failed because {e} already exists"
-            "; use --reuse-installs or similar to reuse or --force to overwrite",
+            "; use --reuse-installs (or equivalent) to reuse it",
             file=sys.stderr,
         )
         ctx.exit(1)
@@ -500,7 +529,7 @@ def prepare_work_path(
     except PathExistsError as e:
         click.echo(
             f"error: preparing {name} failed because {e} already exists"
-            "; use --reuse-plots or similar to reuse or --force to overwrite",
+            "; use --reuse-plots (or equivalent) to reuse them",
             file=sys.stderr,
         )
         ctx.exit(1)

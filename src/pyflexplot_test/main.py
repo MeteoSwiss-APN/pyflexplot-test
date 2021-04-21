@@ -95,14 +95,11 @@ def handle_existing_clone(
             if cfg.debug:
                 print(
                     f"DBG:{_name_}: could reuse existing clone at {clone_cfg.path}, but"
-                    " won't because --reuse-installs or similar has not been passed"
+                    " won't because --reuse-installs (or equivalent) has not been"
+                    " passed"
                 )
     is_file_or_not_empty = not clone_cfg.path.is_dir() or any(clone_cfg.path.iterdir())
     if is_file_or_not_empty:
-        if not cfg.force:
-            if cfg.debug:
-                print(f"DBG:{_name_} cannot reuse existing clone at {clone_cfg.path}")
-            raise PathExistsError(clone_cfg.path)
         if cfg.debug:
             print(f"DBG:{_name_}: remove existing clone at {clone_cfg.path}")
         shutil.rmtree(clone_cfg.path)
@@ -155,17 +152,10 @@ def prepare_work_path(wdir_cfg: WorkDirConfig, cfg: RunConfig) -> None:
         if wdir_cfg.reuse:
             if cfg.debug:
                 print(f"DBG:{_name_}: reuse old work dir at {path}")
-        elif wdir_cfg.replace:
+        else:
             if cfg.debug:
                 print(f"DBG:{_name_}: remove old work dir at {path}")
             shutil.rmtree(path)
-        else:
-            if cfg.debug:
-                print(
-                    f"DBG:{_name_}: old work dir at {path} is neither to be reused nor"
-                    " replaced"
-                )
-            raise PathExistsError(path)
     path.mkdir(parents=True, exist_ok=True)
 
 
