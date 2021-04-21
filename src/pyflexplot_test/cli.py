@@ -244,8 +244,10 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     type=PathlibPath(),
 )
 @click.pass_context
+# pylint: disable=R0912  # too-many-branches (>12)
 # pylint: disable=R0913  # too-many-arguments (>5)
 # pylint: disable=R0914  # too-many-locals (>15)
+# pylint: disable=R0915  # too-many-statements (>50)
 def cli(
     ctx: Context,
     data_path: Path,
@@ -395,15 +397,11 @@ def cli(
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare old executable")
-    old_exe_path = prepare_exe(
-        ctx, repo_path=repo_path, case="old", clone_cfg=old_clone_cfg, cfg=cfg
-    )
+    old_exe_path = prepare_exe("old", repo_path, old_clone_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare new executable")
-    new_exe_path = prepare_exe(
-        ctx, repo_path=repo_path, case="new", clone_cfg=new_clone_cfg, cfg=cfg
-    )
+    new_exe_path = prepare_exe("new", repo_path, new_clone_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare work dirs")
@@ -542,14 +540,11 @@ def prepare_reuse(
     return reuse_old, reuse_new
 
 
-# pylint: disable=R0913  # too-many-arguments (>5)
 def prepare_exe(
-    ctx: Context,
-    *,
     case: str,
-    cfg: RunConfig,
-    clone_cfg: CloneConfig,
     repo_path: str,
+    clone_cfg: CloneConfig,
+    cfg: RunConfig,
 ) -> Path:
     """Prepare clone of repo, install into virtual env and return exe path."""
     print(f"prepare {case} clone or {repo_path}@{clone_cfg.rev} at {clone_cfg.path}")

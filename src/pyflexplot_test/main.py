@@ -25,7 +25,6 @@ from .config import CloneConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
-from .utils import check_paths_equiv
 from .utils import run_cmd
 
 
@@ -173,6 +172,7 @@ def create_plots(
 # pylint: disable=R0912  # too-many-branches (>12)
 # pylint: disable=R0913  # too-many-arguments (>5)
 # pylint: disable=R0914  # too-many-locals (>15)
+# pylint: disable=R0915  # too-many-statements (>50)
 def create_plots_for_preset(
     exe_path: Path,
     work_path: Path,
@@ -394,15 +394,17 @@ class PlotPair:
         run_cmd(cmd_args)
 
     def _compare_unequal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
-        width = max(
-            int(self._identify(self.path1, format="%[w]", trim=True)),
-            int(self._identify(self.path2, format="%[w]", trim=True)),
-        )
-        height = max(
-            int(self._identify(self.path1, format="%[h]", trim=True)),
-            int(self._identify(self.path2, format="%[h]", trim=True)),
-        )
+        _name_ = "main._compare_unequal_sized"
+        w1 = int(self._identify(self.path1, fmt="%[w]", trim=True))
+        w2 = int(self._identify(self.path2, fmt="%[w]", trim=True))
+        h1 = int(self._identify(self.path1, fmt="%[h]", trim=True))
+        h2 = int(self._identify(self.path2, fmt="%[h]", trim=True))
+        width = max(w1, w2)
+        height = max(h1, h2)
         size = f"{width}x{height}"
+        if cfg.debug:
+            print(f"DBG:{_name_}: original sizes: ({w1}x{h1}), ({w2}x{h2})")
+            print(f"DBG:{_name_}: target size: ({size})")
         args_prep = (
             f"-trim -resize {size} -background white -gravity north-west -extent {size}"
             f" -bordercolor white -border 10"
@@ -425,16 +427,16 @@ class PlotPair:
 
     def _equal_sized(self) -> bool:
         """Determine whether the images are of equal size."""
-        size1 = self._identify(self.path1, format="%[w]x%[h]")
-        size2 = self._identify(self.path2, format="%[w]x%[h]")
+        size1 = self._identify(self.path1, fmt="%[w]x%[h]")
+        size2 = self._identify(self.path2, fmt="%[w]x%[h]")
         return size1 == size2
 
     @staticmethod
-    def _identify(path: Path, format: Optional[str] = None, trim: bool = False) -> str:
+    def _identify(path: Path, fmt: Optional[str] = None, trim: bool = False) -> str:
         """Run IM's identify for ``path``."""
         cmd_idfy = "identify"
-        if format is not None:
-            cmd_idfy += f" -format {format}"
+        if fmt is not None:
+            cmd_idfy += f" -format {fmt}"
         if not trim:
             cmd_idfy += f" {path}"
             stdout, _ = Popen(cmd_idfy.split(), stdout=PIPE).communicate()
@@ -457,6 +459,7 @@ class PlotPair:
 class PlotPairSequence:
     """A sequence of ``PlotPair`` instances."""
 
+    # pylint: disable=R0913  # too-many-arguments (>5)
     def __init__(
         self,
         paths1: Sequence[Path],
@@ -468,14 +471,14 @@ class PlotPairSequence:
         """Create an instance of ``PlotPair``."""
         paths1 = list(paths1)
         paths2 = list(paths2)
-        check_paths_equiv(
+        self.check_paths_equiv(
             paths1=paths1,
             paths2=paths2,
             base1=base1,
             base2=base2,
-            sort_rel=sort,
-            action="warn",
+            err_action="warn",
             del_missing=True,
+            sort_rel=sort,
         )
         self.pairs: List[PlotPair] = [
             PlotPair(path1=old_path, path2=new_path, base1=base1, base2=base2)
@@ -501,6 +504,7 @@ class PlotPairSequence:
         for pair in self:
             try:
                 diff_path = pair.compare(diffs_path, cfg)
+            # pylint: disable=W0703  # broad-except
             except Exception:
                 print("-" * 50, file=sys.stderr)
                 traceback.print_exc()
@@ -519,3 +523,87 @@ class PlotPairSequence:
 
     def __len__(self) -> int:
         return len(self.pairs)
+
+    # pylint: disable=R0913  # too-many-arguments (>5)
+    @staticmethod
+    def check_paths_equiv(
+        paths1: List[Path],
+        paths2: List[Path],
+        base1: Optional[Path] = None,
+        base2: Optional[Path] = None,
+        *,
+        err_action: str = "raise",
+        del_missing: bool = False,
+        sort_rel: bool = False,
+    ) -> None:
+        """Check that to collections of paths are equivalent.
+
+        Args:
+            paths1: First collection of paths
+
+            paths2: Second collection of paths
+
+            base1 (optional): Base paths subtracted from ``paths1`` to obtain
+                relative paths
+
+            base2 (optional): Base paths subtracted from ``paths2`` to obtain
+                relative paths
+
+            err_action (optional): Action to take when a path in one collection
+                is missing in the other; "raise" an exception or only "warn" the
+                user
+
+            del_missing (optional): Delete paths from the collection if they are
+                missing in the other; incompatible with ``action`` "raise"
+
+            sort_rel (optional): Sort the paths by their relative
+                representation; if ``base1`` or ``base2`` is omitted, the
+                respective paths are sorted as is
+
+        """
+        actions = ["raise", "warn"]
+        if err_action not in actions:
+            raise ValueError(f"invalid action '{err_action}'; must be among {actions}")
+        if del_missing and err_action == "raise":
+            raise ValueError("del_missing=T is incompatible with action 'raise'")
+
+        def subtract_base(paths: List[Path], base: Optional[Path]) -> List[Path]:
+            if base is None:
+                return list(paths)
+            return [path.relative_to(base) for path in paths]
+
+        # pylint: disable=R0913  # too-many-arguments (>5)
+        def run(
+            name1: str,
+            paths1: List[Path],
+            base1: Optional[Path],
+            name2: str,
+            paths2: List[Path],
+            base2: Optional[Path],
+        ) -> None:
+            rel_paths1 = subtract_base(paths1, base1)
+            rel_paths2 = subtract_base(paths2, base2)
+            for path1, rel_path1 in zip(list(paths1), list(rel_paths1)):
+                if rel_path1 in rel_paths2:
+                    continue
+                msg = (
+                    f"path from relative paths '{name1}' missing in relative paths"
+                    f" '{name2}': {rel_path1}"
+                )
+                if err_action == "raise":
+                    raise AssertionError(msg)
+                elif err_action == "warn":
+                    print(f"warning: {msg}", file=sys.stderr)
+                if del_missing:
+                    paths1.remove(path1)
+                    rel_paths1.remove(rel_path1)
+            if sort_rel:
+                paths1_sorted_by_rel = sorted(
+                    [(rel_path1, path1) for path1, rel_path1 in zip(paths1, rel_paths1)]
+                )
+                paths1.clear()
+                for _, path1 in paths1_sorted_by_rel:
+                    paths1.append(path1)
+
+        run("paths2", paths2, base2, "paths1", paths1, base1)
+        run("paths1", paths1, base1, "paths2", paths2, base2)
