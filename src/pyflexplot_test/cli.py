@@ -431,7 +431,7 @@ def cli(
         base1=old_clone_cfg.wdir.path,
         base2=new_clone_cfg.wdir.path,
     )
-    diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg)
+    diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg, err_ok=True)
     n_plots = len(plot_pairs)
     n_diff = len(diff_plot_paths)
     print(f"{n_diff}/{n_plots} ({n_diff / n_plots:.0%}) plot pairs differ")

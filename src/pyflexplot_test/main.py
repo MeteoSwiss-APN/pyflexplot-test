@@ -391,6 +391,7 @@ class PlotPair:
                 diff_path = diff_path.parent / Path(
                     re.sub(r"(.\w+$)", r"-raw\1", diff_path.name)
                 )
+            diff_path.parent.mkdir(parents=True, exist_ok=True)
             if self._equal_sized():
                 self._compare_equal_sized(diff_path, cfg, raw)
             else:
@@ -510,7 +511,12 @@ class PlotPairSequence:
         ]
 
     def create_diffs(
-        self, diffs_path: Path, cfg: RunConfig, raw: bool = False
+        self,
+        diffs_path: Path,
+        cfg: RunConfig,
+        *,
+        err_ok: bool = False,
+        raw: bool = False,
     ) -> List[Path]:
         """Create difference plots for those pairs that differ.
 
@@ -518,6 +524,9 @@ class PlotPairSequence:
             diffs_path: Path where diff plots are saved.
 
             cfg: Run configuration.
+
+            err_ok (optional): Continue in case of an error instead of raising
+                an exception.
 
             raw (optional): Only return raw diff mask.
 
@@ -531,15 +540,20 @@ class PlotPairSequence:
             try:
                 diff_path = pair.create_diff(diffs_path, cfg, raw=raw)
             # pylint: disable=W0703  # broad-except
-            except Exception:
-                print("-" * 50, file=sys.stderr)
-                traceback.print_exc()
-                print("-" * 50, file=sys.stderr)
-                print(
-                    "error during diff creation (see traceback above);"
-                    f" abort comparison of {pair.rel_path1} and {pair.rel_path2}",
-                    file=sys.stderr,
-                )
+            except Exception as e:
+                if not err_ok:
+                    raise Exception(
+                        f"error comparing {pair.rel_path1} and {pair.rel_path2}:\n{e}"
+                    ) from e
+                else:
+                    print("-" * 50, file=sys.stderr)
+                    traceback.print_exc()
+                    print("-" * 50, file=sys.stderr)
+                    print(
+                        "error during diff creation (see traceback above);"
+                        f" abort comparison of {pair.rel_path1} and {pair.rel_path2}",
+                        file=sys.stderr,
+                    )
             if diff_path is not None:
                 diff_paths.append(diff_path)
         return diff_paths
@@ -554,7 +568,7 @@ class PlotPairSequence:
 
         """
         _name_ = f"{__name__}.{type(self).__name__}.create_composite_diff"
-        diff_paths = self.create_diffs(diffs_path, cfg, raw=True)
+        diff_paths = self.create_diffs(diffs_path, cfg, err_ok=False, raw=True)
         if not diff_paths:
             raise Exception("missing diff plots to create composite diff plot")
         composite_path = diffs_path / f"composite_diff_{len(diff_paths)}x.png"
