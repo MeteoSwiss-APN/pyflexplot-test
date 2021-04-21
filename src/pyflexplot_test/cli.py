@@ -7,7 +7,6 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
-from typing import Union
 
 # Third-party
 import click
@@ -277,14 +276,6 @@ def cli(
     check_for_active_venv(ctx)
 
     if cfg.debug:
-        print(f"DBG:{_name_}: prepare data paths")
-    start_path = Path(".").absolute()
-    old_data_path, new_data_path = prepare_data_paths(
-        data_path, old_data_path, new_data_path, Path(DEFAULT_DATA_PATH)
-    )
-    del data_path
-
-    if cfg.debug:
         print(f"DBG:{_name_}: prepare presets")
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     check_infiles(ctx, infiles, len(old_presets))
@@ -292,6 +283,19 @@ def cli(
         ctx, infiles, infiles_old_new, len(old_presets)
     )
     del infiles
+
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare data paths")
+    start_path = Path(".").absolute()
+    old_data_path, new_data_path = prepare_data_paths(
+        ctx,
+        data_path,
+        old_data_path,
+        new_data_path,
+        old_default_path=None if old_infiles else Path(DEFAULT_DATA_PATH),
+        new_default_path=None if new_infiles else Path(DEFAULT_DATA_PATH),
+    )
+    del data_path
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare install reuse flags")
@@ -517,21 +521,31 @@ def prepare_infiles(
     return (old_infiles, new_infiles)
 
 
+# pylint: disable=R0913  # too-many-arguments (>5)
 def prepare_data_paths(
+    ctx: Context,
     path: Optional[Path],
     old_path: Optional[Path],
     new_path: Optional[Path],
-    default_path: Path,
+    old_default_path: Optional[Path],
+    new_default_path: Optional[Path],
     absolute: bool = True,
-) -> Union[Tuple[Path, Path], Tuple[None, None]]:
-    if (path, old_path, new_path) == (None, None, None):
-        return None, None
-    else:
-        old_path = old_path or path or default_path
-        new_path = new_path or path or default_path
+) -> Tuple[Optional[Path], Optional[Path]]:
+    old_path = old_path or path or old_default_path
+    new_path = new_path or path or new_default_path
+    if old_path and not old_path.exists():
+        click.echo(
+            f"error: old data path does not exist: '{old_path}/'", file=sys.stderr
+        )
+        ctx.exit(1)
+    if new_path and not new_path.exists():
+        click.echo(
+            f"error: new data path does not exist: '{new_path}/'", file=sys.stderr
+        )
+        ctx.exit(1)
     if absolute:
-        old_path = old_path.absolute()
-        new_path = new_path.absolute()
+        old_path = None if not old_path else old_path.absolute()
+        new_path = None if not new_path else new_path.absolute()
     return old_path, new_path
 
 
