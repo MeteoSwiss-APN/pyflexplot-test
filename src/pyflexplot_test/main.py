@@ -396,7 +396,7 @@ class PlotPair:
         cmd_args = ["compare", str(self.path1), str(self.path2), str(diff_path)]
         if cfg.debug:
             print(
-                f"DBG:{_name_}: creating diff plot with following command:\n$ "
+                f"DBG:{_name_}: create diff plot with following command:\n$ "
                 + " \\\n    ".join(cmd_args)
             )
         run_cmd(cmd_args)
@@ -548,26 +548,26 @@ class PlotPairSequence:
         """Check that to collections of paths are equivalent.
 
         Args:
-            paths1: First collection of paths
+            paths1: First collection of paths.
 
-            paths2: Second collection of paths
+            paths2: Second collection of paths.
 
             base1 (optional): Base paths subtracted from ``paths1`` to obtain
-                relative paths
+                relative paths.
 
             base2 (optional): Base paths subtracted from ``paths2`` to obtain
-                relative paths
+                relative paths.
 
             err_action (optional): Action to take when a path in one collection
                 is missing in the other; "raise" an exception or only "warn" the
-                user
+                user.
 
             del_missing (optional): Delete paths from the collection if they are
-                missing in the other; incompatible with ``action`` "raise"
+                missing in the other; incompatible with ``action`` "raise".
 
             sort_rel (optional): Sort the paths by their relative
                 representation; if ``base1`` or ``base2`` is omitted, the
-                respective paths are sorted as is
+                respective paths are sorted as is.
 
         """
         actions = ["raise", "warn"]
