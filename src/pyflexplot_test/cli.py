@@ -19,12 +19,11 @@ from .config import CloneConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
-from .exceptions import PathExistsError
 from .main import create_plots
 from .main import install_exe
 from .main import PlotPairSequence
 from .main import prepare_clone
-from .main import prepare_work_path as _prepare_work_path_core
+from .main import prepare_work_path
 from .utils import git_get_remote_tags
 
 DEFAULT_DATA_PATH = "data"
@@ -408,9 +407,9 @@ def cli(
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare work dirs")
-    prepare_work_path(ctx, "old work dir", old_wdir_cfg, cfg)
-    prepare_work_path(ctx, "new work dir", new_wdir_cfg, cfg)
-    prepare_work_path(ctx, "diffs dir", diffs_wdir_cfg, cfg)
+    prepare_work_path(old_wdir_cfg, cfg)
+    prepare_work_path(new_wdir_cfg, cfg)
+    prepare_work_path(diffs_wdir_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: create old plots")
@@ -554,30 +553,8 @@ def prepare_exe(
 ) -> Path:
     """Prepare clone of repo, install into virtual env and return exe path."""
     print(f"prepare {case} clone or {repo_path}@{clone_cfg.rev} at {clone_cfg.path}")
-    try:
-        prepare_clone(repo_path, clone_cfg, cfg)
-    except PathExistsError as e:
-        click.echo(
-            f"error: preparing {case} clone failed because {e} already exists"
-            "; use --reuse-installs (or equivalent) to reuse it",
-            file=sys.stderr,
-        )
-        ctx.exit(1)
+    prepare_clone(repo_path, clone_cfg, cfg)
     if cfg.verbose:
         print(f"prepare {case} executable in {clone_cfg.path}")
     exe_path = install_exe(clone_cfg.path, clone_cfg.reuse, cfg)
     return exe_path
-
-
-def prepare_work_path(
-    ctx: Context, name: str, wdir_cfg: WorkDirConfig, cfg: RunConfig
-) -> None:
-    try:
-        _prepare_work_path_core(wdir_cfg, cfg)
-    except PathExistsError as e:
-        click.echo(
-            f"error: preparing {name} failed because {e} already exists"
-            "; use --reuse-plots (or equivalent) to reuse them",
-            file=sys.stderr,
-        )
-        ctx.exit(1)

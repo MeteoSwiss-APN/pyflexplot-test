@@ -25,7 +25,6 @@ from .config import CloneConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
-from .exceptions import PathExistsError
 from .utils import check_paths_equiv
 from .utils import run_cmd
 
