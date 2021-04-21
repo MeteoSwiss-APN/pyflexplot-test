@@ -432,13 +432,15 @@ def cli(
         base2=new_clone_cfg.wdir.path,
     )
     diff_plot_paths = plot_pairs.compare(diffs_path, cfg)
+    n_plots = len(plot_pairs)
+    n_diff = len(diff_plot_paths)
+    print(f"{n_diff}/{n_plots} ({n_diff / n_plots:.0%}) plot pairs differ")
     if diff_plot_paths:
-        print(
-            f"created {len(diff_plot_paths)} diff plots in "
-            f"{diffs_path.relative_to(start_path)}"
-        )
+        print(f"\n{n_diff} new diff plots: {diffs_path.relative_to(start_path)}/")
         if cfg.verbose:
-            print("\n".join([str(p.relative_to(start_path)) for p in diff_plot_paths]))
+            print()
+            for path in diff_plot_paths:
+                print(path.relative_to(start_path))
 
 
 def prepare_presets(

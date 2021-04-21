@@ -372,25 +372,33 @@ class PlotPair:
         diffs_path: Optional[Union[Path, str]] = None,
         cfg: RunConfig = RunConfig(),
     ) -> Optional[Path]:
-        if cfg.verbose:
-            print(f"comparing pair {self.shared_base}")
+        _name_ = f"{__name__}.{type(self).__name__}.compare"
+        if cfg.debug:
+            print(f"DBG:{_name_}: comparing pair {self.shared_base}")
         if filecmp.cmp(self.path1, self.path2):
-            print(f"identical: {self.shared_base}")
+            if cfg.verbose:
+                print(f"identical: {self.shared_base}")
             return None
-        print(f"differing: {self.shared_base}")
-        diff_path = self.shared_base
-        if diffs_path:
-            diff_path = Path(diffs_path) / diff_path
-        if self._equal_sized():
-            self._compare_equal_sized(diff_path, cfg)
         else:
-            self._compare_unequal_sized(diff_path, cfg)
-        return diff_path
+            if cfg.verbose:
+                print(f"differing: {self.shared_base}")
+            diff_path = self.shared_base
+            if diffs_path:
+                diff_path = Path(diffs_path) / diff_path
+            if self._equal_sized():
+                self._compare_equal_sized(diff_path, cfg)
+            else:
+                self._compare_unequal_sized(diff_path, cfg)
+            return diff_path
 
     def _compare_equal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
+        _name_ = "_compare_equal_sized"
         cmd_args = ["compare", str(self.path1), str(self.path2), str(diff_path)]
-        if cfg.verbose:
-            print("creating diff plot:\n$ " + " \\\n    ".join(cmd_args))
+        if cfg.debug:
+            print(
+                f"DBG:{_name_}: creating diff plot with following command:\n$ "
+                + " \\\n    ".join(cmd_args)
+            )
         run_cmd(cmd_args)
 
     def _compare_unequal_sized(self, diff_path: Path, cfg: RunConfig) -> None:
@@ -414,7 +422,8 @@ class PlotPair:
         cmd_prep = f"convert {args_path1} {args_path2} miff:-"
         cmd_comp = f"compare miff:- {diff_path}"
         cmd = " | ".join([cmd_prep, cmd_comp])
-        print(f"creating diff plot:\n$ {cmd}")
+        if cfg.debug:
+            print(f"DBG:{_name_}: creating diff plot with following command:\n$ {cmd}")
         _, stderr = Popen(
             cmd_comp.split(),
             stdin=Popen(cmd_prep.split(), stdout=PIPE).stdout,
@@ -499,7 +508,7 @@ class PlotPairSequence:
         if len(self) == 0:
             print("error: no pairs of plots to compute")
             return []
-        print(f"comparing {len(self)} pairs of plots:")
+        print(f"compare {len(self)} pairs of plots")
         diff_paths: List[Path] = []
         for pair in self:
             try:
