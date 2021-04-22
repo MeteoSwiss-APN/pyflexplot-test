@@ -42,36 +42,94 @@ ${venv_dir}/bin/pyflexplot-test --help
 
 ```
 $ pyflexplot-test -V
-0.1.0
+0.3.2
 
 $ pyflexplot-test -h
 Usage: pyflexplot-test [OPTIONS]
 
 Options:
-  --data-path PATHLIB.PATH  path to data directory
-  -f, --force               overwrite existing repos etc.
-  --infile TEXT             input file (netcdf) overriding that specified in
-                            the preset; --infile must not be passed more often
-                            than --preset; if both --preset and --infile are
-                            passed more than once, their numbers must match
+  --data PATH                     path to data directory; defaults to data;
+                                  overridden by --old-data and --new-data;
+                                  ignored if --infile and/or --infiles-old-new
+                                  are passed
 
-  --only INTEGER            restrict the number of plots per preset
-  --preset TEXT             preset used to create plots; may be repeated
-  --num-procs INTEGER       number of parallel processes during plotting
-  --old-rev TEXT            old revision of pyflexplot; defaults to lanew tag;
-                            may be anything that git can check out (tag name,
-                            branch name, commit hash)
+  --infile PATH                   input file path overriding the input file
+                                  specified in the preset; incompatible with
+                                  --infiles-old-new; may be omitted, passed
+                                  once or passed the same number of times as
+                                  --preset, in which case the infiles and
+                                  presets are paired in order
 
-  --repo TEXT               pyflexplot repository path
-  --new-rev TEXT            new revision of pyflexplot; defaults to 'dev'
-                            (head of development branch); may be anything that
-                            git can check out (tag name, branch name, commit
-                            hash
+  --infiles-old-new PATH...       pair of input file paths overriding the
+                                  input file specified in the old and new
+                                  preset, respectively; incompatible with
+                                  --infile; may be omitted, passed once or
+                                  passed the same number of times as --preset,
+                                  in which case the infile pairs and presets
+                                  are paired in order
 
-  --work-dir PATHLIB.PATH   working directory
-  -v                        verbose output
-  -V, --version             Show the version and exit.
-  -h, --help                Show this message and exit.
+  --new-data PATH                 path to data directory for --old-rev;
+                                  overrides or defaults to --data; ignored if
+                                  --infile and/or --infiles-old-new are passed
+
+  --new-rev TEXT                  new revision of pyflexplot; defaults to
+                                  'dev' (head of development branch); may be
+                                  anything that git can check out (tag name,
+                                  branch name, commit hash
+
+  --num-procs INTEGER             number of parallel processes during plotting
+  --old-data PATH                 path to data directory for --new-rev;
+                                  overrides or defaults to --data; ignored if
+                                  --infile and/or --infiles-old-new are passed
+
+  --presets-old-new TEXT...       pair of presets used to create old and new
+                                  plots, respectively; may be repeated;
+                                  equivalent to (but incompatible with)
+                                  --preset
+
+  --old-rev TEXT                  old revision of pyflexplot; defaults to
+                                  lanew tag; may be anything that git can
+                                  check out (tag name, branch name, commit
+                                  hash)
+
+  --only INTEGER                  restrict the number of plots per preset
+  --preset TEXT                   preset used to create plots; may be
+                                  repeated; equivalent to (but incompatible
+                                  with) --presets-old-new
+
+  --repo TEXT                     pyflexplot repository path
+  --reuse-installs / --reinstall  reuse venvs of existing repo clones instead
+                                  of reinstalling them; overriddenby --reuse-(
+                                  old|new)-install/--reinstall-(old|new)
+
+  --reuse-new-install / --reinstall-new
+                                  reuse venv of existing clones of new repo
+                                  instead of reinstalling it; overrides
+                                  --reuse-installs/--reinstall for new repo
+
+  --reuse-old-install / --reinstall-old
+                                  reuse venv of existing clones of old repo
+                                  instead of reinstalling it; overrides
+                                  --reuse-installs/--reinstall for old repo
+
+  --reuse-new-plots / --replot-new
+                                  reuse existing new plots rather than
+                                  recomputing them; overrides --reuse-
+                                  plots/--replot for new plots
+
+  --reuse-old-plots / --replot-old
+                                  reuse existing old plots rather than
+                                  recomputing them; overrides --reuse-
+                                  plots/--replot for old plots
+
+  --reuse-plots / --replot        reuse existing plots rather than recomputing
+                                  them; overridden by
+                                  --reuse-(old|new)-plots/--replot-(old|new)
+
+  -v                              increase verbosity
+  -V, --version                   Show the version and exit.
+  --work PATH                     working directory
+  -h, --help                      Show this message and exit.
 ```
 
 ## Getting started
