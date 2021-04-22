@@ -285,7 +285,8 @@ def cli(
         ctx, presets, presets_old_new, infiles, infiles_old_new
     )
     del presets, infiles
-    assert len(old_presets) == len(new_presets) == len(old_infiles) == len(new_infiles)
+    assert len(old_presets) == len(new_presets)
+    assert len(old_infiles) == len(new_infiles)
     n_presets = len(old_presets)
 
     if cfg.debug:
