@@ -42,7 +42,7 @@ ${venv_dir}/bin/pyflexplot-test --help
 
 ```
 $ pyflexplot-test -V
-0.3.2
+0.4.1
 
 $ pyflexplot-test -h
 Usage: pyflexplot-test [OPTIONS]
@@ -68,6 +68,9 @@ Options:
                                   in which case the infile pairs and presets
                                   are paired in order
 
+  --install-dir PATH              install directory in which git clones and
+                                  their venvs are saved
+
   --new-data PATH                 path to data directory for --old-rev;
                                   overrides or defaults to --data; ignored if
                                   --infile and/or --infiles-old-new are passed
@@ -81,7 +84,6 @@ Options:
   --old-data PATH                 path to data directory for --new-rev;
                                   overrides or defaults to --data; ignored if
                                   --infile and/or --infiles-old-new are passed
-
   --presets-old-new TEXT...       pair of presets used to create old and new
                                   plots, respectively; may be repeated;
                                   equivalent to (but incompatible with)
@@ -97,7 +99,7 @@ Options:
                                   repeated; equivalent to (but incompatible
                                   with) --presets-old-new
 
-  --repo TEXT                     pyflexplot repository path
+  --repo TEXT                     pyflexplot repository URL
   --reuse-installs / --reinstall  reuse venvs of existing repo clones instead
                                   of reinstalling them; overriddenby --reuse-(
                                   old|new)-install/--reinstall-(old|new)
@@ -128,8 +130,16 @@ Options:
 
   -v                              increase verbosity
   -V, --version                   Show the version and exit.
-  --work PATH                     working directory
+  --work-dir PATH                 working directory in which plots and diffs
+                                  are saved in subdirectories; may be passed
+                                  repeatedly, specifically once for every
+                                  --preset/--presets-old-new in order to
+                                  prevent plots based on the same prefix but
+                                  different input files from overwriting each
+                                  other
+
   -h, --help                      Show this message and exit.
+
 ```
 
 ## Getting started
