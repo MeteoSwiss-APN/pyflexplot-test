@@ -1,13 +1,9 @@
-=======
-Credits
-=======
+# Credits
 
-Development Lead
-----------------
+## Development Lead
 
-* Stefan Ruedisuehli <stefan.ruedisuehli@meteoswiss.ch>
+- Stefan Ruedisuehli <stefan.ruedisuehli@meteoswiss.ch>
 
-Contributors
-------------
+## Contributors
 
 None yet. Why not be the first?
