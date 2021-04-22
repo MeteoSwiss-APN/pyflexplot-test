@@ -3,6 +3,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Sequence
@@ -16,6 +17,7 @@ from click import Context
 from . import __version__
 from .config import InstallConfig
 from .config import PlotConfig
+from .config import ReuseConfig
 from .config import RunConfig
 from .config import WorkDirConfig
 from .main import animate_diff_plots
@@ -178,8 +180,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 )
 @click.option(
     "--repo",
-    "repo_path",
-    help="pyflexplot repository path",
+    "repo_url",
+    help="pyflexplot repository URL",
     default="git@github.com:MeteoSwiss-APN/pyflexplot.git",
 )
 @click.option(
@@ -244,10 +246,16 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 )
 @click.option(
     "--work-dir",
-    "work_dir_path",
-    help="working directory in which plots and diffs are saved in subdirectories",
+    "work_dir_paths",
+    help=(
+        "working directory in which plots and diffs are saved in subdirectories"
+        "; may be passed repeatedly, specifically once for every --preset"
+        "/--presets-old-new in order to prevent plots based on the same prefix but"
+        " different input files from overwriting each other"
+    ),
     type=PathlibPath(),
-    default="pyflexplot-test/work",
+    default=["pyflexplot-test/work"],
+    multiple=True,
 )
 @click.pass_context
 # pylint: disable=R0912  # too-many-branches (>12)
@@ -257,25 +265,22 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 def cli(
     ctx: Context,
     data_path: Path,
-    infiles: Tuple[Path, ...],
-    infiles_old_new: Tuple[Tuple[Path, Path], ...],
+    infiles: Sequence[Path],
+    infiles_old_new: Sequence[Tuple[Path, Path]],
     install_dir_path: Path,
     new_data_path: Optional[Path],
     new_rev: str,
-    num_procs: int,
     old_data_path: Optional[Path],
-    presets_old_new: Tuple[Tuple[str, str], ...],
+    presets_old_new: Sequence[Tuple[str, str]],
     old_rev: Optional[str],
-    only: Optional[int],
-    presets: Tuple[str, ...],
-    repo_path: str,
+    presets: Sequence[str],
     reuse_installs: bool,
     reuse_new_install: Optional[bool],
     reuse_old_install: Optional[bool],
     reuse_new_plots: Optional[bool],
     reuse_old_plots: Optional[bool],
     reuse_plots: bool,
-    work_dir_path: Path,
+    work_dir_paths: Sequence[Path],
     **cfg_kwargs,
 ) -> None:
     _name_ = "cli.cli"
@@ -286,15 +291,14 @@ def cli(
     if cfg.debug:
         print(f"DBG:{_name_}: prepare presets")
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
-    check_infiles(ctx, infiles, len(old_presets))
-    old_infiles, new_infiles = prepare_infiles(
-        ctx, infiles, infiles_old_new, len(old_presets)
-    )
+    n_presets = len(old_presets)
+    assert len(new_presets) == n_presets
+    check_infiles(ctx, infiles, n_presets)
+    old_infiles, new_infiles = prepare_infiles(ctx, infiles, infiles_old_new, n_presets)
     del infiles
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare data paths")
-    start_path = Path(".").absolute()
     old_data_path, new_data_path = prepare_data_paths(
         ctx,
         data_path,
@@ -305,16 +309,18 @@ def cli(
     )
     del data_path
 
+    reuse_cfg = ReuseConfig()
+
     if cfg.debug:
         print(f"DBG:{_name_}: prepare install reuse flags")
-    reuse_old_install, reuse_new_install = prepare_reuse(
+    reuse_cfg.old_install, reuse_cfg.new_install = prepare_reuse(
         reuse_installs, reuse_old_install, reuse_new_install
     )
     del reuse_installs
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare plot reuse flags")
-    reuse_old_plots, reuse_new_plots = prepare_reuse(
+    reuse_cfg.old_plots, reuse_cfg.new_plots = prepare_reuse(
         reuse_plots, reuse_old_plots, reuse_new_plots
     )
     del reuse_plots
@@ -323,14 +329,18 @@ def cli(
         print(f"DBG:{_name_}: prepare old rev")
     if old_rev is None:
         if cfg.verbose:
-            print(f"obtain old_rev from repo {repo_path}")
-        tags = git_get_remote_tags(repo_path)
+            print(f"obtain old_rev from repo {cfg.repo_url}")
+        tags = git_get_remote_tags(cfg.repo_url)
         if cfg.verbose:
             sel_tags = tags if len(tags) <= 7 else tags[:3] + ["..."] + tags[-3:]
             print(f"select most recent of {len(tags)} tags ({', '.join(sel_tags)})")
         old_rev = tags[-1]
         if cfg.verbose:
             print(f"old_rev: {old_rev}")
+
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare work dir paths")
+    work_dir_paths = prepare_work_dir_paths(ctx, work_dir_paths, n_presets)
 
     if cfg.debug:
         print("+" * 40)
@@ -345,98 +355,145 @@ def cli(
         print("{:20}: {}".format("old_rev", old_rev))
         print("{:20}: {}".format("new_rev", new_rev))
         #
-        print("{:20}: {}".format("repo_path", repo_path))
         print("{:20}: {}".format("install_dir_path", install_dir_path))
-        print("{:20}: {}".format("work_dir_path", work_dir_path))
-        #
-        print("{:20}: {}".format("num_procs", num_procs))
-        print("{:20}: {}".format("only", only))
+        print("{:20}: {}".format("work_dir_paths", work_dir_paths))
         print("+" * 40)
 
     if cfg.debug:
-        print(f"DBG:{_name_}: prepare paths")
+        print(f"DBG:{_name_}: prepare install dir")
     install_dir_path = install_dir_path.absolute()
-    work_dir_path = work_dir_path.absolute()
+    install_dir_path.mkdir(parents=True, exist_ok=True)
     old_install_path = install_dir_path / old_rev
     new_install_path = install_dir_path / new_rev
-    old_work_path = work_dir_path / old_rev
-    new_work_path = work_dir_path / new_rev
-    diffs_path = work_dir_path / f"{old_rev}_vs_{new_rev}"
-    install_dir_path.mkdir(parents=True, exist_ok=True)
+
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare install configs")
+    old_install_cfg = InstallConfig(
+        path=old_install_path,
+        rev=old_rev,
+        reuse=reuse_cfg.old_install,
+    )
+    new_install_cfg = InstallConfig(
+        path=new_install_path,
+        rev=new_rev,
+        reuse=reuse_cfg.new_install,
+    )
+
+    grouped_by_work_dir = group_by_work_dir(
+        old_presets, new_presets, old_infiles, new_infiles, work_dir_paths
+    )
+    for (
+        work_dir_path,
+        (
+            old_presets_i,
+            new_presets_i,
+            old_infiles_i,
+            new_infiles_i,
+        ),
+    ) in grouped_by_work_dir.items():
+        run_in_work_dir(
+            work_dir_path,
+            old_presets_i,
+            new_presets_i,
+            old_infiles_i,
+            new_infiles_i,
+            old_data_path,
+            new_data_path,
+            old_install_cfg,
+            new_install_cfg,
+            reuse_cfg,
+            cfg,
+        )
+
+
+# pylint: disable=R0912  # too-many-branches (>12)
+# pylint: disable=R0913  # too-many-arguments
+# pylint: disable=R0914  # too-many-locals (>15)
+# pylint: disable=R0915  # too-many-statements (>50)
+def run_in_work_dir(
+    work_dir_path: Path,
+    old_presets: Sequence[str],
+    new_presets: Sequence[str],
+    old_infiles: Sequence[Path],
+    new_infiles: Sequence[Path],
+    old_data_path: Optional[Path],
+    new_data_path: Optional[Path],
+    old_install_cfg: InstallConfig,
+    new_install_cfg: InstallConfig,
+    reuse_cfg: ReuseConfig,
+    cfg: RunConfig,
+) -> None:
+    _name_ = "run_in_work_dir"
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare work dirs")
+    old_work_path = work_dir_path / old_install_cfg.rev
+    old_work_path.mkdir(parents=True, exist_ok=True)
+    new_work_path = work_dir_path / new_install_cfg.rev
+    new_work_path.mkdir(parents=True, exist_ok=True)
+    diffs_path = work_dir_path / f"{old_install_cfg.rev}_vs_{new_install_cfg.rev}"
     diffs_path.mkdir(parents=True, exist_ok=True)
 
-    old_work_dir_cfg = WorkDirConfig(
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare work dirs configs")
+    old_work_dirs_cfg = WorkDirConfig(
         path=old_work_path,
-        reuse=reuse_old_plots,
+        reuse=reuse_cfg.old_plots,
     )
-    new_work_dir_cfg = WorkDirConfig(
+    new_work_dirs_cfg = WorkDirConfig(
         path=new_work_path,
-        reuse=reuse_new_plots,
+        reuse=reuse_cfg.new_plots,
     )
     # Note: This always replaces all diff plots, even if a rerun is made with
     # fewer presets than a previous runs, in which case the diff plots of the
     # left-out presets will be lost (but can easily be recomputed by rerunning
     # with all previous presets at once with --reuse-plots and --reuse-installs)
-    diffs_work_dir_cfg = WorkDirConfig(
+    diffs_work_dirs_cfg = WorkDirConfig(
         path=diffs_path,
         reuse=False,
         replace=True,
     )
-    old_install_cfg = InstallConfig(
-        path=old_install_path,
-        rev=old_rev,
-        reuse=reuse_old_install,
-        work_dir=old_work_dir_cfg,
-    )
-    new_install_cfg = InstallConfig(
-        path=new_install_path,
-        rev=new_rev,
-        reuse=reuse_new_install,
-        work_dir=new_work_dir_cfg,
-    )
+
+    if cfg.debug:
+        print(f"DBG:{_name_}: prepare plot configs")
     old_plot_cfg = PlotConfig(
         data_path=old_data_path,
         infiles=old_infiles,
-        num_procs=num_procs,
-        only=only,
         presets=old_presets,
-        reuse=reuse_old_plots,
+        reuse=reuse_cfg.old_plots,
     )
     new_plot_cfg = PlotConfig(
         data_path=new_data_path,
         infiles=new_infiles,
-        num_procs=num_procs,
-        only=only,
         presets=new_presets,
-        reuse=reuse_new_plots,
+        reuse=reuse_cfg.new_plots,
     )
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare old executable")
-    old_exe_path = prepare_exe("old", repo_path, old_install_cfg, cfg)
+    old_exe_path = prepare_exe("old", old_install_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare new executable")
-    new_exe_path = prepare_exe("new", repo_path, new_install_cfg, cfg)
+    new_exe_path = prepare_exe("new", new_install_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare work dirs")
-    prepare_work_path(old_work_dir_cfg, cfg)
-    prepare_work_path(new_work_dir_cfg, cfg)
-    prepare_work_path(diffs_work_dir_cfg, cfg)
+    prepare_work_path(old_work_dirs_cfg, cfg)
+    prepare_work_path(new_work_dirs_cfg, cfg)
+    prepare_work_path(diffs_work_dirs_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: create old plots")
     print(f"prepare old plots in {old_exe_path}")
     old_plot_paths = create_plots(
-        old_exe_path, old_install_cfg.work_dir.path, old_plot_cfg, cfg
+        old_exe_path, old_work_dirs_cfg.path, old_plot_cfg, cfg
     )
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: create new plots")
     print(f"prepare new plots in {new_exe_path}")
     new_plot_paths = create_plots(
-        new_exe_path, new_install_cfg.work_dir.path, new_plot_cfg, cfg
+        new_exe_path, new_work_dirs_cfg.path, new_plot_cfg, cfg
     )
 
     if cfg.debug:
@@ -444,53 +501,72 @@ def cli(
     plot_pairs = PlotPairSequence(
         paths1=old_plot_paths,
         paths2=new_plot_paths,
-        base1=old_install_cfg.work_dir.path,
-        base2=new_install_cfg.work_dir.path,
+        base1=old_work_dirs_cfg.path,
+        base2=new_work_dirs_cfg.path,
     )
     diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg, err_ok=True)
     n_plots = len(plot_pairs)
     n_diff = len(diff_plot_paths)
-    print(f"{n_diff}/{n_plots} ({n_diff / n_plots:.0%}) plot pairs differ")
+    frac = 0 if n_plots == 0 else n_diff / n_plots
+    print(f"{n_diff}/{n_plots} ({frac:.0%}) plot pairs differ")
     if diff_plot_paths:
         if cfg.debug:
             print(f"DBG:{_name_}: create composite diff plot")
         composite_diff_plot = plot_pairs.create_composite_diff(diffs_path, cfg)
         animated_diff_plot = animate_diff_plots(diffs_path, diff_plot_paths, cfg)
         print()
-        print(f"{n_diff} new diff plots in {diffs_path.relative_to(start_path)}/")
+        print(f"{n_diff} new diff plots in {diffs_path.relative_to(cfg.start_path)}/")
         if cfg.verbose:
             for path in diff_plot_paths:
-                print(path.relative_to(start_path))
+                print(path.relative_to(cfg.start_path))
         print()
-        print(f"diff composite: {composite_diff_plot.relative_to(start_path)}")
-        print(f"diff animation: {animated_diff_plot.relative_to(start_path)}")
+        print(f"diff composite: {composite_diff_plot.relative_to(cfg.start_path)}")
+        print(f"diff animation: {animated_diff_plot.relative_to(cfg.start_path)}")
 
 
-def prepare_presets(
+# pylint: disable=R0913  # too-many-arguments (>5)
+def prepare_data_paths(
     ctx: Context,
-    presets: Sequence[str],
-    presets_old_new: Sequence[Tuple[str, str]],
-) -> Tuple[List[str], List[str]]:
-    """Prepare preset strings for old and new revision."""
-    old_presets: List[str] = []
-    new_presets: List[str] = []
-    if not presets and not presets_old_new:
+    path: Optional[Path],
+    old_path: Optional[Path],
+    new_path: Optional[Path],
+    old_default_path: Optional[Path],
+    new_default_path: Optional[Path],
+    absolute: bool = True,
+) -> Tuple[Optional[Path], Optional[Path]]:
+    old_path = old_path or path or old_default_path
+    new_path = new_path or path or new_default_path
+    if old_path and not old_path.exists():
         click.echo(
-            "must pass --preset or --presets-old-new at least once", file=sys.stderr
+            f"error: old data path does not exist: '{old_path}/'", file=sys.stderr
         )
         ctx.exit(1)
-    elif presets:
-        old_presets.extend(presets)
-        new_presets.extend(presets)
-    else:
-        for old_preset, new_preset in presets_old_new:
-            old_presets.append(old_preset)
-            new_presets.append(new_preset)
-    for presets_i in [old_presets, new_presets]:
-        for preset in presets_i:
-            if preset.endswith("_pdf"):
-                raise NotImplementedError(f"PDF presets ({preset})")
-    return old_presets, new_presets
+    if new_path and not new_path.exists():
+        click.echo(
+            f"error: new data path does not exist: '{new_path}/'", file=sys.stderr
+        )
+        ctx.exit(1)
+    if absolute:
+        old_path = None if not old_path else old_path.absolute()
+        new_path = None if not new_path else new_path.absolute()
+    return old_path, new_path
+
+
+def prepare_exe(
+    case: str,
+    install_cfg: InstallConfig,
+    cfg: RunConfig,
+) -> Path:
+    """Prepare clone of repo, install into virtual env and return exe path."""
+    print(
+        f"prepare {case} clone or {cfg.repo_url}@{install_cfg.rev} at"
+        f" {install_cfg.path}"
+    )
+    prepare_clone(cfg.repo_url, install_cfg, cfg)
+    if cfg.verbose:
+        print(f"prepare {case} executable in {install_cfg.path}")
+    exe_path = install_exe(install_cfg.path, install_cfg.reuse, cfg)
+    return exe_path
 
 
 def prepare_infiles(
@@ -537,32 +613,31 @@ def prepare_infiles(
     return (old_infiles, new_infiles)
 
 
-# pylint: disable=R0913  # too-many-arguments (>5)
-def prepare_data_paths(
+def prepare_presets(
     ctx: Context,
-    path: Optional[Path],
-    old_path: Optional[Path],
-    new_path: Optional[Path],
-    old_default_path: Optional[Path],
-    new_default_path: Optional[Path],
-    absolute: bool = True,
-) -> Tuple[Optional[Path], Optional[Path]]:
-    old_path = old_path or path or old_default_path
-    new_path = new_path or path or new_default_path
-    if old_path and not old_path.exists():
+    presets: Sequence[str],
+    presets_old_new: Sequence[Tuple[str, str]],
+) -> Tuple[List[str], List[str]]:
+    """Prepare preset strings for old and new revision."""
+    old_presets: List[str] = []
+    new_presets: List[str] = []
+    if not presets and not presets_old_new:
         click.echo(
-            f"error: old data path does not exist: '{old_path}/'", file=sys.stderr
+            "must pass --preset/--presets-old-new at least once", file=sys.stderr
         )
         ctx.exit(1)
-    if new_path and not new_path.exists():
-        click.echo(
-            f"error: new data path does not exist: '{new_path}/'", file=sys.stderr
-        )
-        ctx.exit(1)
-    if absolute:
-        old_path = None if not old_path else old_path.absolute()
-        new_path = None if not new_path else new_path.absolute()
-    return old_path, new_path
+    elif presets:
+        old_presets.extend(presets)
+        new_presets.extend(presets)
+    else:
+        for old_preset, new_preset in presets_old_new:
+            old_presets.append(old_preset)
+            new_presets.append(new_preset)
+    for presets_i in [old_presets, new_presets]:
+        for preset in presets_i:
+            if preset.endswith("_pdf"):
+                raise NotImplementedError(f"PDF presets ({preset})")
+    return old_presets, new_presets
 
 
 def prepare_reuse(
@@ -575,18 +650,46 @@ def prepare_reuse(
     return reuse_old, reuse_new
 
 
-def prepare_exe(
-    case: str,
-    repo_path: str,
-    install_cfg: InstallConfig,
-    cfg: RunConfig,
-) -> Path:
-    """Prepare clone of repo, install into virtual env and return exe path."""
-    print(
-        f"prepare {case} clone or {repo_path}@{install_cfg.rev} at {install_cfg.path}"
-    )
-    prepare_clone(repo_path, install_cfg, cfg)
-    if cfg.verbose:
-        print(f"prepare {case} executable in {install_cfg.path}")
-    exe_path = install_exe(install_cfg.path, install_cfg.reuse, cfg)
-    return exe_path
+# pylint: disable=R1710  # inconsistent-return-statements (ctx.exit)
+def prepare_work_dir_paths(
+    ctx: Context, work_dir_paths: Sequence[Path], n_presets: int
+) -> List[Path]:
+    if len(work_dir_paths) == 1:
+        work_dir_paths = [next(iter(work_dir_paths))] * n_presets
+    if len(work_dir_paths) == n_presets:
+        return [Path(path).absolute() for path in work_dir_paths]
+    else:
+        click.echo(
+            f"wrong number of --work-dir ({len(work_dir_paths)}); unless omitted, must"
+            f" be passed once or as often as --preset/--presets-old-new ({n_presets})"
+        )
+        ctx.exit(1)
+
+
+def group_by_work_dir(
+    old_presets: Sequence[str],
+    new_presets: Sequence[str],
+    old_infiles: Sequence[Path],
+    new_infiles: Sequence[Path],
+    work_dir_paths: Sequence[Path],
+) -> Dict[Path, Tuple[List[str], List[str], List[Path], List[Path]]]:
+    sizes = [
+        len(work_dir_paths),
+        len(old_presets),
+        len(new_presets),
+        len(old_infiles),
+        len(new_infiles),
+    ]
+    if len(set(sizes)) > 1:
+        raise ValueError(f"argument sequences differ in size: {sizes}")
+    grouped: Dict[Path, Tuple[List[str], List[str], List[Path], List[Path]]] = {
+        path: ([], [], [], []) for path in work_dir_paths
+    }
+    for old_preset, new_preset, old_infile, new_infile, path in zip(
+        old_presets, new_presets, old_infiles, new_infiles, work_dir_paths
+    ):
+        grouped[path][0].append(old_preset)
+        grouped[path][1].append(new_preset)
+        grouped[path][2].append(old_infile)
+        grouped[path][3].append(new_infile)
+    return grouped

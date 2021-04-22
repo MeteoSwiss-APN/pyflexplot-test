@@ -8,8 +8,12 @@ from typing import Sequence
 
 @dc.dataclass
 class RunConfig:
-    force: bool = False
-    verbosity: int = 0
+    num_procs: int
+    only: Optional[int]
+    repo_url: str
+    verbosity: int
+    #
+    start_path: Path = Path(".").absolute()
 
     @property
     def verbose(self) -> bool:
@@ -21,11 +25,19 @@ class RunConfig:
 
 
 @dc.dataclass
+class ReuseConfig:
+    old_install: bool = False
+    new_install: bool = False
+    old_plots: bool = False
+    new_plots: bool = False
+
+
+@dc.dataclass
 class WorkDirConfig:
-    """Work dir config.
+    """Working directory config.
 
     Params:
-        path: Path to work dir.
+        path: Path to working directory.
 
         reuse: Reuse existing work dir at ``path``; if true, takes precedence
             over ``replace``.
@@ -45,14 +57,11 @@ class InstallConfig:
     path: Path
     rev: str
     reuse: bool
-    work_dir: WorkDirConfig
 
 
 @dc.dataclass
 class PlotConfig:
     data_path: Optional[Path]
     infiles: Sequence[Path]
-    num_procs: int
-    only: Optional[int]
     presets: Sequence[str]
     reuse: bool

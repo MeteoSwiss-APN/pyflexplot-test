@@ -196,10 +196,10 @@ def create_plots_for_preset(
     ]
     if infile:
         cmd_args += ["--setup", "infile", str(infile)]
-    if plot_cfg.only:
-        cmd_args += [f"--only={plot_cfg.only}"]
+    if cfg.only:
+        cmd_args += [f"--only={cfg.only}"]
     cmd_args_dry = cmd_args + ["--dry-run"]
-    cmd_args += [f"--num-procs={plot_cfg.num_procs}"]
+    cmd_args += [f"--num-procs={cfg.num_procs}"]
 
     # Perform dry-run to obtain the plots that will be produced
     expected_plot_names = perform_dry_run(cmd_args_dry, cfg)
@@ -371,8 +371,8 @@ class PlotPair:
 
     def create_diff(
         self,
-        diffs_path: Optional[Union[Path, str]] = None,
-        cfg: RunConfig = RunConfig(),
+        diffs_path: Optional[Union[Path, str]],
+        cfg: RunConfig,
         raw: bool = False,
     ) -> Optional[Path]:
         _name_ = f"{__name__}.{type(self).__name__}.create_diff"
