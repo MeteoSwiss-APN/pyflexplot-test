@@ -149,34 +149,68 @@ Options:
 Compare the head of the development branch against the latest tag:
 
 ```bash
-pyflexplot-test -v --num-procs=6 --data-path=/scratch-shared/meteoswiss/scratch/ruestefa/shared/test/pyflexplot/data
+data="/scratch-shared/meteoswiss/scratch/ruestefa/shared/test/pyflexplot/data"
+pyflexplot-test -v --num-procs=6 --data-path="${data}"
 ```
 
-This will create two separate installs of pyflexplot in `pyflexplot-test/git/` and run each three times, once for each specified preset.
-Then the plots created by the two versions in `pyflexplot-test/work/` will be compared, and for those that are not identical, diff images will be produced in `pyflexplot-test/work/v0.13.11_vs_dev/`, on which the differences are highlighted.
+This will create two separate installs of pyflexplot in `./pyflexplot-test/install/` and run each three times, once for each specified preset.
+Then the plots created by the two versions in `./pyflexplot-test/work/` will be compared, and for those that are not identical, diff images will be produced in `pyflexplot-test/work/v0.13.11_vs_dev/`, on which the differences are highlighted.
 The default preset is `--preset=opr/*/all_png`.
 The default infiles in the presets are specified relative to a `./data/` directory.
 If this directory is not present, the path to it must be supplied with `--data-path`.
 
 ### Advanced usage
 
-Example comparing the branch v0.14.0-pre against version v0.13.11:
+#### Example 1
+
+Multiple presets can be compared in one run, and for each, a separate input file can be specified, which override the defaults specified in the preset setup files.
 
 ```bash
 pyflexplot-test --num-procs=6 \
-  --old-rev=v0.13.11 --new-rev v0.14.0-pre \
+  --old-rev=v0.13.11 --new-rev=v0.14.0-pre \
   --preset=opr/cosmo-1e-ctrl/all_png --infile=data/cosmo-1e-ctrl/grid_conc_0924_20200301000000.nc \
   --preset=opr/ifs-hres-eu/all_png --infile=data/ifs-hres-eu/grid_conc_0998_20200818000000_goesgen_2spec.nc \
   --preset=opr/ifs-hres/all_png --infile=data/ifs-hres/grid_conc_1000_20200818000000_bushehr_2spec.nc
 ```
 
-Note:
+Notes:
 
-- At the time of writing, v0.13.11 happened to be the latest version and would thus automatically have been picked as the old version had `--old-ref=v0.13.11` been omitted.
+- A separate input file is specified for each preset. The matching only depends on the respective order of the `--preset` and `--infile` flags among themselves; passing first all `--preset` flags and then all `--infile` flags or any other combination would yield the same result.
+- If only one input file is specified, it is applied to all presets. This of course only works, if all presets apply to the same model (which is not the case in this example).
+- If v0.13.11 is the current latest tag, `--new-ref` can be omitted.
 - Parallelization (`--num-procs`) only applies to the individual pyflexplot runs.
   Pyflexplot-test itself always runs sequentially, i.e., one pyflexplot run after the other, only the runs themselves may be parallelized.
-- If the `pyflexplot-test` command is used repeatedly, use `-f` to reuse an existing work directory.
-  Just make sure not to accidentally delete anything in that directory by doing so.
+
+#### Example 2
+
+If the same preset is repeated for different input files, chances are some plots will be overwritten. To avoid this, a separate work directory can be specified for each.
+
+```bash
+data="/scratch-shared/meteoswiss/scratch/ruestefa/shared/test/pyflexplot/data"
+file1="${data}/cosmo-1e-ctrl/grid_conc_xxxx_20200619030000_BEZ.nc"
+file2="${data}/cosmo-1e-ctrl/grid_conc_xxxx_20200619030000_BUG.nc"
+file3="${data}/cosmo-1e-ctrl/grid_conc_xxxx_20200619030000_FES.nc"
+pyflexplot-test \
+  --reuse-installs \
+  --work-dir=test/work/cosmo-1e-ctrl/BEZ --preset=opr/cosmo-1e-ctrl/all_png --infile="${file1}" \
+  --work-dir=test/work/cosmo-1e-ctrl/BUG --preset=opr/cosmo-1e-ctrl/all_png --infile="${file2}" \
+  --work-dir=test/work/cosmo-1e-ctrl/FES --preset=opr/cosmo-1e-ctrl/all_png --infile="${file3}"
+```
+
+Notes:
+
+- If pyflexplot-test has previously been run with the same versions (and those have not changed), `--reuse-installs` will reuse existing installations instead of reinstalling pyflexplot, which saves time.
+- If there have been changes to the new version (`--new-rev`), but the old reference version (`--old-rev`) is still the same, only the latter is reused with `--reuse-old-install`, while the former is reinstalled (thanks to an implied `--reinstall-old`).
+- Reinstallation only works if the install directory (`--install-dir`) stays the same (e.g., the default `./pyflexplot-test/install/`).
+- Likewise, existing plots may be reused with `--reuse-plots` etc., for instance to only recreate the diff plots. Like for installs, this requires the same work directory (`--work-dir`).
+- By taking advantage of some bash notation tricks and the fact that only the raltive order of the same flags matters, the command can be shortened as follows:
+
+  ```bash
+  pyflexplot-test \
+    --work-dir=test/work/cosmo-1e-ctrl/{BEZ,BUG,FES} \
+    --preset=opr/cosmo-1e-ctrl/all_png{,,} \
+    --infile="${file1}" --infile="${file2}" --infile="${file3}"
+  ```
 
 ## Credits
 
