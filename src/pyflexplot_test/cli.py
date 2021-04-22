@@ -378,6 +378,14 @@ def cli(
         reuse=reuse_cfg.new_install,
     )
 
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: prepare old executable")
+    old_exe_path = prepare_exe("old", old_install_cfg, cfg)
+
+    if cfg.debug:
+        print(f"\nDBG:{_name_}: prepare new executable")
+    new_exe_path = prepare_exe("new", new_install_cfg, cfg)
+
     grouped_by_work_dir = group_by_work_dir(
         old_presets, new_presets, old_infiles, new_infiles, work_dir_paths
     )
@@ -398,6 +406,8 @@ def cli(
             new_infiles_i,
             old_data_path,
             new_data_path,
+            old_exe_path,
+            new_exe_path,
             old_install_cfg,
             new_install_cfg,
             reuse_cfg,
@@ -417,6 +427,8 @@ def run_in_work_dir(
     new_infiles: Sequence[Path],
     old_data_path: Optional[Path],
     new_data_path: Optional[Path],
+    old_exe_path: Path,
+    new_exe_path: Path,
     old_install_cfg: InstallConfig,
     new_install_cfg: InstallConfig,
     reuse_cfg: ReuseConfig,
@@ -466,14 +478,6 @@ def run_in_work_dir(
         presets=new_presets,
         reuse=reuse_cfg.new_plots,
     )
-
-    if cfg.debug:
-        print(f"\nDBG:{_name_}: prepare old executable")
-    old_exe_path = prepare_exe("old", old_install_cfg, cfg)
-
-    if cfg.debug:
-        print(f"\nDBG:{_name_}: prepare new executable")
-    new_exe_path = prepare_exe("new", new_install_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare work dirs")
