@@ -51,22 +51,6 @@ def check_for_active_venv(ctx: Context) -> None:
     ctx.exit(1)
 
 
-def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None:
-    n_in = len(infiles)
-    if n_in > n_presets:
-        click.echo(
-            f"error: more infiles ({n_in}) than presets ({n_presets})", file=sys.stderr
-        )
-        ctx.exit(1)
-    if n_presets > 1 and n_in > 1 and n_in != n_presets:
-        click.echo(
-            f"error: multiple presets ({n_presets}) and infiles ({n_in}), but their"
-            " numbersdon't match",
-            file=sys.stderr,
-        )
-        ctx.exit(1)
-
-
 @click.command(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -86,8 +70,11 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     help=(
         "input file path overriding the input file specified in the preset"
         "; incompatible with --infiles-old-new"
-        "; may be omitted, passed once or passed the same number of times as --preset,"
-        " in which case the infiles and presets are paired in order"
+        "; may be omitted, passed once (in which case the same infile is used for all"
+        " presets), passed the same number of times as --preset/--presets-old-new (in"
+        " which case the infiles and presets are paired in order) or passed an"
+        " arbitrary number of times if --preset/--presets-old-new is not passed more"
+        " than once (in which case the same preset is used for all infiles)"
     ),
     type=PathlibPath(),
     multiple=True,
@@ -97,9 +84,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "infiles_old_new",
     help=(
         "pair of input file paths overriding the input file specified in the old and"
-        " new preset, respectively; incompatible with --infile"
-        "; may be omitted, passed once or passed the same number of times as --preset,"
-        " in which case the infile pairs and presets are paired in order"
+        " new preset, respectively; may be repeated (see --infile for details)"
+        "; equivalent to but incompatible with --infile"
     ),
     nargs=2,
     type=PathlibPath(),
@@ -150,8 +136,9 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--presets-old-new",
     "presets_old_new",
     help=(
-        "pair of presets used to create old and new plots, respectively; may be"
-        " repeated; equivalent to (but incompatible with) --preset"
+        "pair of presets used to create old and new plots, respectively"
+        "; may be repeated (see --preset for details)"
+        "; equivalent to but incompatible with --preset"
     ),
     nargs=2,
     multiple=True,
@@ -173,8 +160,12 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--preset",
     "presets",
     help=(
-        "preset used to create plots; may be repeated; equivalent to (but incompatible"
-        " with) --presets-old-new"
+        "preset used to create plots; may be repeated; equivalent to but incompatible"
+        " with --presets-old-new; may be omitted, passed once (in which case the same"
+        " preset is used for all infiles), passed the same number of times as --infile"
+        "/--infiles-old-new (in which case the presets and infiles are paired in order)"
+        " or passed an arbitrary number of times if --infile/--infiles-old-new is not"
+        " passed more than once (in which case the same infile is used for all presets)"
     ),
     multiple=True,
 )
@@ -289,12 +280,13 @@ def cli(
     check_for_active_venv(ctx)
 
     if cfg.debug:
-        print(f"DBG:{_name_}: prepare presets")
-    old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
+        print(f"DBG:{_name_}: prepare presets and infiles")
+    old_presets, new_presets, old_infiles, new_infiles = prepare_presets_infiles(
+        ctx, presets, presets_old_new, infiles, infiles_old_new
+    )
+    del presets, infiles
+    assert len(old_presets) == len(new_presets) == len(old_infiles) == len(new_infiles)
     n_presets = len(old_presets)
-    assert len(new_presets) == n_presets
-    old_infiles, new_infiles = prepare_infiles(ctx, infiles, infiles_old_new, n_presets)
-    del infiles
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare data paths")
@@ -574,20 +566,39 @@ def prepare_exe(
     return exe_path
 
 
-def prepare_infiles(
+def prepare_presets_infiles(
     ctx: Context,
+    presets: Sequence[str],
+    presets_old_new: Sequence[Tuple[str, str]],
     infiles: Sequence[Path],
     infiles_old_new: Sequence[Tuple[Path, Path]],
-    n_presets: int,
     absolute: bool = True,
-) -> Tuple[List[Path], List[Path]]:
-    """Prepare infile paths for old and new revision."""
-    check_infiles(ctx, infiles, n_presets)
+) -> Tuple[List[str], List[str], List[Path], List[Path]]:
+    """Prepare preset strings and infile paths for old and new revision."""
+    old_presets: List[str] = []
+    new_presets: List[str] = []
+    if not presets and not presets_old_new:
+        click.echo(
+            "must pass --preset/--presets-old-new at least once", file=sys.stderr
+        )
+        ctx.exit(1)
+    elif presets:
+        old_presets.extend(presets)
+        new_presets.extend(presets)
+    else:
+        for old_preset, new_preset in presets_old_new:
+            old_presets.append(old_preset)
+            new_presets.append(new_preset)
+    for presets_i in [old_presets, new_presets]:
+        for preset in presets_i:
+            if preset.endswith("_pdf"):
+                raise NotImplementedError(f"PDF presets ({preset})")
+    n_presets = len(old_presets)
     if not infiles and not infiles_old_new:
         old_infiles = []
         new_infiles = []
     elif infiles and not infiles_old_new:
-        if len(infiles) in [1, n_presets]:
+        if len(infiles) in [1, n_presets] or n_presets == 1:
             old_infiles = [Path(infile) for infile in infiles]
             new_infiles = [Path(infile) for infile in infiles]
         else:
@@ -613,37 +624,15 @@ def prepare_infiles(
             "error: --infile and --infiles-old-new are incompatible", file=sys.stderr
         )
         ctx.exit(1)
+    n_infiles = len(old_infiles)
+    if n_presets == 1 and n_infiles > 1:
+        n_presets = n_infiles
+        old_presets = [next(iter(old_presets)) for _ in range(n_infiles)]
+        new_presets = [next(iter(new_presets)) for _ in range(n_infiles)]
     if absolute:
         old_infiles = [path.absolute() for path in old_infiles]
         new_infiles = [path.absolute() for path in new_infiles]
-    return (old_infiles, new_infiles)
-
-
-def prepare_presets(
-    ctx: Context,
-    presets: Sequence[str],
-    presets_old_new: Sequence[Tuple[str, str]],
-) -> Tuple[List[str], List[str]]:
-    """Prepare preset strings for old and new revision."""
-    old_presets: List[str] = []
-    new_presets: List[str] = []
-    if not presets and not presets_old_new:
-        click.echo(
-            "must pass --preset/--presets-old-new at least once", file=sys.stderr
-        )
-        ctx.exit(1)
-    elif presets:
-        old_presets.extend(presets)
-        new_presets.extend(presets)
-    else:
-        for old_preset, new_preset in presets_old_new:
-            old_presets.append(old_preset)
-            new_presets.append(new_preset)
-    for presets_i in [old_presets, new_presets]:
-        for preset in presets_i:
-            if preset.endswith("_pdf"):
-                raise NotImplementedError(f"PDF presets ({preset})")
-    return old_presets, new_presets
+    return old_presets, new_presets, old_infiles, new_infiles
 
 
 def prepare_reuse(
