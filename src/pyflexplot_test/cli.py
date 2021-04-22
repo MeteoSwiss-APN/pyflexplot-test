@@ -507,6 +507,7 @@ def run_in_work_dir(
     n_plots = len(plot_pairs)
     n_diff = len(diff_plot_paths)
     frac = 0 if n_plots == 0 else n_diff / n_plots
+    print()
     print(f"{n_diff}/{n_plots} ({frac:.0%}) plot pairs differ")
     if diff_plot_paths:
         if cfg.debug:
@@ -521,6 +522,7 @@ def run_in_work_dir(
         print()
         print(f"diff composite: {composite_diff_plot.relative_to(cfg.start_path)}")
         print(f"diff animation: {animated_diff_plot.relative_to(cfg.start_path)}")
+    print()
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
