@@ -41,11 +41,11 @@ class WorkDirConfig:
 
 
 @dc.dataclass
-class CloneConfig:
+class InstallConfig:
     path: Path
     rev: str
     reuse: bool
-    wdir: WorkDirConfig
+    work_dir: WorkDirConfig
 
 
 @dc.dataclass

@@ -14,7 +14,7 @@ from click import Context
 
 # Local
 from . import __version__
-from .config import CloneConfig
+from .config import InstallConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
@@ -102,6 +102,13 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     nargs=2,
     type=PathlibPath(),
     multiple=True,
+)
+@click.option(
+    "--install-dir",
+    "install_dir_path",
+    help="install directory in which git clones and their venvs are saved",
+    type=PathlibPath(),
+    default="pyflexplot-test/install",
 )
 @click.option(
     "--new-data",
@@ -236,11 +243,11 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     message="%(version)s",
 )
 @click.option(
-    "--work",
-    "wdir_path",
-    help="working directory",
-    default="pyflexplot-test",
+    "--work-dir",
+    "work_dir_path",
+    help="working directory in which plots and diffs are saved in subdirectories",
     type=PathlibPath(),
+    default="pyflexplot-test/work",
 )
 @click.pass_context
 # pylint: disable=R0912  # too-many-branches (>12)
@@ -252,6 +259,7 @@ def cli(
     data_path: Path,
     infiles: Tuple[Path, ...],
     infiles_old_new: Tuple[Tuple[Path, Path], ...],
+    install_dir_path: Path,
     new_data_path: Optional[Path],
     new_rev: str,
     num_procs: int,
@@ -267,7 +275,7 @@ def cli(
     reuse_new_plots: Optional[bool],
     reuse_old_plots: Optional[bool],
     reuse_plots: bool,
-    wdir_path: Path,
+    work_dir_path: Path,
     **cfg_kwargs,
 ) -> None:
     _name_ = "cli.cli"
@@ -324,8 +332,10 @@ def cli(
         if cfg.verbose:
             print(f"old_rev: {old_rev}")
 
-    if cfg.verbose:
+    if cfg.debug:
         print("+" * 40)
+        print(f"DBG:{_name_}: Setup")
+        print("-" * 40)
         print("{:20}: {}".format("old_data_path", old_data_path))
         print("{:20}: {}".format("new_data_path", new_data_path))
         print("{:20}: {}".format("old_infiles", list(map(str, old_infiles))))
@@ -335,29 +345,31 @@ def cli(
         print("{:20}: {}".format("old_rev", old_rev))
         print("{:20}: {}".format("new_rev", new_rev))
         #
+        print("{:20}: {}".format("repo_path", repo_path))
+        print("{:20}: {}".format("install_dir_path", install_dir_path))
+        print("{:20}: {}".format("work_dir_path", work_dir_path))
+        #
         print("{:20}: {}".format("num_procs", num_procs))
         print("{:20}: {}".format("only", only))
-        print("{:20}: {}".format("repo_path", repo_path))
-        print("{:20}: {}".format("wdir_path", wdir_path))
         print("+" * 40)
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare paths")
-    wdir_path = wdir_path.absolute()
-    clones_path = wdir_path / "git"
-    old_clones_path = clones_path / old_rev
-    new_clones_path = clones_path / new_rev
-    old_work_path = wdir_path / "work" / old_rev
-    new_work_path = wdir_path / "work" / new_rev
-    diffs_path = wdir_path / "work" / f"{old_rev}_vs_{new_rev}"
-    clones_path.mkdir(parents=True, exist_ok=True)
+    install_dir_path = install_dir_path.absolute()
+    work_dir_path = work_dir_path.absolute()
+    old_install_path = install_dir_path / old_rev
+    new_install_path = install_dir_path / new_rev
+    old_work_path = work_dir_path / old_rev
+    new_work_path = work_dir_path / new_rev
+    diffs_path = work_dir_path / f"{old_rev}_vs_{new_rev}"
+    install_dir_path.mkdir(parents=True, exist_ok=True)
     diffs_path.mkdir(parents=True, exist_ok=True)
 
-    old_wdir_cfg = WorkDirConfig(
+    old_work_dir_cfg = WorkDirConfig(
         path=old_work_path,
         reuse=reuse_old_plots,
     )
-    new_wdir_cfg = WorkDirConfig(
+    new_work_dir_cfg = WorkDirConfig(
         path=new_work_path,
         reuse=reuse_new_plots,
     )
@@ -365,22 +377,22 @@ def cli(
     # fewer presets than a previous runs, in which case the diff plots of the
     # left-out presets will be lost (but can easily be recomputed by rerunning
     # with all previous presets at once with --reuse-plots and --reuse-installs)
-    diffs_wdir_cfg = WorkDirConfig(
+    diffs_work_dir_cfg = WorkDirConfig(
         path=diffs_path,
         reuse=False,
         replace=True,
     )
-    old_clone_cfg = CloneConfig(
-        path=old_clones_path,
+    old_install_cfg = InstallConfig(
+        path=old_install_path,
         rev=old_rev,
         reuse=reuse_old_install,
-        wdir=old_wdir_cfg,
+        work_dir=old_work_dir_cfg,
     )
-    new_clone_cfg = CloneConfig(
-        path=new_clones_path,
+    new_install_cfg = InstallConfig(
+        path=new_install_path,
         rev=new_rev,
         reuse=reuse_new_install,
-        wdir=new_wdir_cfg,
+        work_dir=new_work_dir_cfg,
     )
     old_plot_cfg = PlotConfig(
         data_path=old_data_path,
@@ -401,30 +413,30 @@ def cli(
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare old executable")
-    old_exe_path = prepare_exe("old", repo_path, old_clone_cfg, cfg)
+    old_exe_path = prepare_exe("old", repo_path, old_install_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare new executable")
-    new_exe_path = prepare_exe("new", repo_path, new_clone_cfg, cfg)
+    new_exe_path = prepare_exe("new", repo_path, new_install_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: prepare work dirs")
-    prepare_work_path(old_wdir_cfg, cfg)
-    prepare_work_path(new_wdir_cfg, cfg)
-    prepare_work_path(diffs_wdir_cfg, cfg)
+    prepare_work_path(old_work_dir_cfg, cfg)
+    prepare_work_path(new_work_dir_cfg, cfg)
+    prepare_work_path(diffs_work_dir_cfg, cfg)
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: create old plots")
     print(f"prepare old plots in {old_exe_path}")
     old_plot_paths = create_plots(
-        old_exe_path, old_clone_cfg.wdir.path, old_plot_cfg, cfg
+        old_exe_path, old_install_cfg.work_dir.path, old_plot_cfg, cfg
     )
 
     if cfg.debug:
         print(f"\nDBG:{_name_}: create new plots")
     print(f"prepare new plots in {new_exe_path}")
     new_plot_paths = create_plots(
-        new_exe_path, new_clone_cfg.wdir.path, new_plot_cfg, cfg
+        new_exe_path, new_install_cfg.work_dir.path, new_plot_cfg, cfg
     )
 
     if cfg.debug:
@@ -432,8 +444,8 @@ def cli(
     plot_pairs = PlotPairSequence(
         paths1=old_plot_paths,
         paths2=new_plot_paths,
-        base1=old_clone_cfg.wdir.path,
-        base2=new_clone_cfg.wdir.path,
+        base1=old_install_cfg.work_dir.path,
+        base2=new_install_cfg.work_dir.path,
     )
     diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg, err_ok=True)
     n_plots = len(plot_pairs)
@@ -566,13 +578,15 @@ def prepare_reuse(
 def prepare_exe(
     case: str,
     repo_path: str,
-    clone_cfg: CloneConfig,
+    install_cfg: InstallConfig,
     cfg: RunConfig,
 ) -> Path:
     """Prepare clone of repo, install into virtual env and return exe path."""
-    print(f"prepare {case} clone or {repo_path}@{clone_cfg.rev} at {clone_cfg.path}")
-    prepare_clone(repo_path, clone_cfg, cfg)
+    print(
+        f"prepare {case} clone or {repo_path}@{install_cfg.rev} at {install_cfg.path}"
+    )
+    prepare_clone(repo_path, install_cfg, cfg)
     if cfg.verbose:
-        print(f"prepare {case} executable in {clone_cfg.path}")
-    exe_path = install_exe(clone_cfg.path, clone_cfg.reuse, cfg)
+        print(f"prepare {case} executable in {install_cfg.path}")
+    exe_path = install_exe(install_cfg.path, install_cfg.reuse, cfg)
     return exe_path

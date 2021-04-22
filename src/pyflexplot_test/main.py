@@ -21,23 +21,23 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError
 
 # Local
-from .config import CloneConfig
+from .config import InstallConfig
 from .config import PlotConfig
 from .config import RunConfig
 from .config import WorkDirConfig
 from .utils import run_cmd
 
 
-def prepare_clone(repo: str, clone_cfg: CloneConfig, cfg: RunConfig) -> Repo:
+def prepare_clone(repo: str, install_cfg: InstallConfig, cfg: RunConfig) -> Repo:
     """Prepare a local clone of a remote git repository."""
     _name_ = "main.prepare_clone"
-    clone_path = clone_cfg.path
+    clone_path = install_cfg.path
     if cfg.debug:
         print(f"DBG:{_name_}: prepare clone at {clone_path}")
     clone: Optional[Repo] = None
     if clone_path.exists():
-        clone = handle_existing_clone(repo, clone_cfg, cfg)
-        if clone_cfg.reuse and clone is not None:
+        clone = handle_existing_clone(repo, install_cfg, cfg)
+        if install_cfg.reuse and clone is not None:
             if cfg.debug:
                 print(f"DBG:{_name_}: reuse existing clone at {clone_path}")
             return clone
@@ -48,25 +48,25 @@ def prepare_clone(repo: str, clone_cfg: CloneConfig, cfg: RunConfig) -> Repo:
         clone = Repo.clone_from(repo, clone_path)
     assert clone is not None  # mypy
     if cfg.debug:
-        print(f"DBG:{_name_}: check out rev: {clone_cfg.rev}")
+        print(f"DBG:{_name_}: check out rev: {install_cfg.rev}")
     clone.git.fetch(all=True)
-    clone.git.checkout(clone_cfg.rev)
+    clone.git.checkout(install_cfg.rev)
     if not clone.head.is_detached:
         clone.git.pull()
     return clone
 
 
 def handle_existing_clone(
-    repo: str, clone_cfg: CloneConfig, cfg: RunConfig
+    repo: str, install_cfg: InstallConfig, cfg: RunConfig
 ) -> Optional[Repo]:
     """Check if existing clone can be reused, and if not, remove it."""
     _name_ = "main.handle_existing_clone"
     try:
-        clone = Repo(clone_cfg.path)
+        clone = Repo(install_cfg.path)
     except InvalidGitRepositoryError:
         if cfg.debug:
             print(
-                f"DBG:{_name_}: existing directory at clone path {clone_cfg.path} is"
+                f"DBG:{_name_}: existing directory at clone path {install_cfg.path} is"
                 " not a git repo"
             )
     else:
@@ -76,31 +76,33 @@ def handle_existing_clone(
         if clone.remote().url != repo:
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path}"
+                    f"DBG:{_name_}: cannot reuse existing clone at {install_cfg.path}"
                     f" because remote URL doesn't match: {clone.remote().url} != {repo}"
                 )
         elif clone.is_dirty():
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: cannot reuse existing clone at {clone_cfg.path}"
+                    f"DBG:{_name_}: cannot reuse existing clone at {install_cfg.path}"
                     " because it's dirty"
                 )
-        elif clone_cfg.reuse:
+        elif install_cfg.reuse:
             if cfg.debug:
-                print(f"DBG:{_name_}: reuse existing clone at {clone_cfg.path}")
+                print(f"DBG:{_name_}: reuse existing clone at {install_cfg.path}")
             return clone
         else:
             if cfg.debug:
                 print(
-                    f"DBG:{_name_}: could reuse existing clone at {clone_cfg.path}, but"
-                    " won't because --reuse-installs (or equivalent) has not been"
+                    f"DBG:{_name_}: could reuse existing clone at {install_cfg.path},"
+                    " but won't because --reuse-installs (or equivalent) has not been"
                     " passed"
                 )
-    is_file_or_not_empty = not clone_cfg.path.is_dir() or any(clone_cfg.path.iterdir())
+    is_file_or_not_empty = not install_cfg.path.is_dir() or any(
+        install_cfg.path.iterdir()
+    )
     if is_file_or_not_empty:
         if cfg.debug:
-            print(f"DBG:{_name_}: remove existing clone at {clone_cfg.path}")
-        shutil.rmtree(clone_cfg.path)
+            print(f"DBG:{_name_}: remove existing clone at {install_cfg.path}")
+        shutil.rmtree(install_cfg.path)
     return None
 
 
