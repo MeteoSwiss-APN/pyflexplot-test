@@ -72,9 +72,9 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--data",
     "data_path",
     help=(
-        f"path to data directory; defaults to {DEFAULT_DATA_PATH}; overridden by"
-        " --old-data and --new-data; ignored if --infile and/or --infiles-old-new are"
-        " passed"
+        f"path to data directory; defaults to {DEFAULT_DATA_PATH}"
+        "; overridden by --old-data and --new-data"
+        "; ignored if --infile and/or --infiles-old-new are passed"
     ),
     type=PathlibPath(),
 )
@@ -82,10 +82,10 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--infile",
     "infiles",
     help=(
-        "input file path overriding the input file specified in the preset;"
-        " incompatible with --infiles-old-new; may be omitted, passed once or passed"
-        " the same number of times as --preset, in which case the infiles and presets"
-        " are paired in order"
+        "input file path overriding the input file specified in the preset"
+        "; incompatible with --infiles-old-new"
+        "; may be omitted, passed once or passed the same number of times as --preset,"
+        " in which case the infiles and presets are paired in order"
     ),
     type=PathlibPath(),
     multiple=True,
@@ -95,9 +95,9 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "infiles_old_new",
     help=(
         "pair of input file paths overriding the input file specified in the old and"
-        " new preset, respectively; incompatible with --infile; may be omitted, passed"
-        " once or passed the same number of times as --preset, in which case the infile"
-        " pairs and presets are paired in order"
+        " new preset, respectively; incompatible with --infile"
+        "; may be omitted, passed once or passed the same number of times as --preset,"
+        " in which case the infile pairs and presets are paired in order"
     ),
     nargs=2,
     type=PathlibPath(),
@@ -107,8 +107,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--new-data",
     "new_data_path",
     help=(
-        "path to data directory for --old-rev; overrides or defaults to --data;"
-        " ignored if --infile and/or --infiles-old-new are passed"
+        "path to data directory for --old-rev; overrides or defaults to --data"
+        "; ignored if --infile and/or --infiles-old-new are passed"
     ),
     type=PathlibPath(),
     default=None,
@@ -116,9 +116,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 @click.option(
     "--new-rev",
     help=(
-        "new revision of pyflexplot; defaults to 'dev' (head of development"
-        " branch); may be anything that git can check out (tag name, branch"
-        " name, commit hash"
+        "new revision of pyflexplot; defaults to 'dev' (head of development branch)"
+        "; may be anything that git can check out (tag name, branch name, commit hash"
     ),
     default="dev",
 )
@@ -132,8 +131,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--old-data",
     "old_data_path",
     help=(
-        "path to data directory for --new-rev; overrides or defaults to --data;"
-        " ignored if --infile and/or --infiles-old-new are passed"
+        "path to data directory for --new-rev; overrides or defaults to --data"
+        "; ignored if --infile and/or --infiles-old-new are passed"
     ),
     type=PathlibPath(),
     default=None,
@@ -151,8 +150,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 @click.option(
     "--old-rev",
     help=(
-        "old revision of pyflexplot; defaults to lanew tag; may be anything"
-        " that git can check out (tag name, branch name, commit hash)"
+        "old revision of pyflexplot; defaults to lanew tag; may be anything that git"
+        " can check out (tag name, branch name, commit hash)"
     ),
 )
 @click.option(
@@ -165,8 +164,8 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
     "--preset",
     "presets",
     help=(
-        "preset used to create plots; may be repeated; equivalent to (but"
-        " incompatible with) --presets-old-new"
+        "preset used to create plots; may be repeated; equivalent to (but incompatible"
+        " with) --presets-old-new"
     ),
     multiple=True,
 )
@@ -187,40 +186,40 @@ def check_infiles(ctx: Context, infiles: Sequence[Path], n_presets: int) -> None
 @click.option(
     "--reuse-new-install/--reinstall-new",
     help=(
-        "reuse venv of existing clones of new repo instead of reinstalling it;"
-        " overrides --reuse-installs/--reinstall for new repo"
+        "reuse venv of existing clones of new repo instead of reinstalling it"
+        "; overrides --reuse-installs/--reinstall for new repo"
     ),
     default=None,
 )
 @click.option(
     "--reuse-old-install/--reinstall-old",
     help=(
-        "reuse venv of existing clones of old repo instead of reinstalling it;"
-        " overrides --reuse-installs/--reinstall for old repo"
+        "reuse venv of existing clones of old repo instead of reinstalling it"
+        "; overrides --reuse-installs/--reinstall for old repo"
     ),
     default=None,
 )
 @click.option(
     "--reuse-new-plots/--replot-new",
     help=(
-        "reuse existing new plots rather than recomputing them; overrides"
-        " --reuse-plots/--replot for new plots"
+        "reuse existing new plots rather than recomputing them"
+        "; overrides --reuse-plots/--replot for new plots"
     ),
     default=None,
 )
 @click.option(
     "--reuse-old-plots/--replot-old",
     help=(
-        "reuse existing old plots rather than recomputing them; overrides"
-        " --reuse-plots/--replot for old plots"
+        "reuse existing old plots rather than recomputing them"
+        "; overrides --reuse-plots/--replot for old plots"
     ),
     default=None,
 )
 @click.option(
     "--reuse-plots/--replot",
     help=(
-        "reuse existing plots rather than recomputing them; overridden by"
-        " --reuse-(old|new)-plots/--replot-(old|new)"
+        "reuse existing plots rather than recomputing them"
+        "; overridden by --reuse-(old|new)-plots/--replot-(old|new)"
     ),
     default=False,
 )
