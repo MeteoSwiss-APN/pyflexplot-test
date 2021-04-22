@@ -293,7 +293,6 @@ def cli(
     old_presets, new_presets = prepare_presets(ctx, presets, presets_old_new)
     n_presets = len(old_presets)
     assert len(new_presets) == n_presets
-    check_infiles(ctx, infiles, n_presets)
     old_infiles, new_infiles = prepare_infiles(ctx, infiles, infiles_old_new, n_presets)
     del infiles
 
@@ -577,6 +576,7 @@ def prepare_infiles(
     absolute: bool = True,
 ) -> Tuple[List[Path], List[Path]]:
     """Prepare infile paths for old and new revision."""
+    check_infiles(ctx, infiles, n_presets)
     if not infiles and not infiles_old_new:
         old_infiles = []
         new_infiles = []
@@ -673,23 +673,37 @@ def group_by_work_dir(
     new_infiles: Sequence[Path],
     work_dir_paths: Sequence[Path],
 ) -> Dict[Path, Tuple[List[str], List[str], List[Path], List[Path]]]:
-    sizes = [
-        len(work_dir_paths),
-        len(old_presets),
-        len(new_presets),
-        len(old_infiles),
-        len(new_infiles),
-    ]
-    if len(set(sizes)) > 1:
-        raise ValueError(f"argument sequences differ in size: {sizes}")
+    n = len(work_dir_paths)
+    if len(old_presets) != n:
+        raise ValueError(f"old_preset has wrong size: {len(old_presets)} != {n}")
+    if len(new_presets) != n:
+        raise ValueError(f"new_preset has wrong size: {len(old_presets)} != {n}")
+    if len(old_infiles) not in [0, n]:
+        raise ValueError(
+            f"old_infiles has wrong size: {len(old_infiles)} not in [1, {n}]"
+        )
+    if len(new_infiles) not in [0, n]:
+        raise ValueError(
+            f"new_infiles has wrong size: {len(new_infiles)} not in [1, {n}]"
+        )
     grouped: Dict[Path, Tuple[List[str], List[str], List[Path], List[Path]]] = {
         path: ([], [], [], []) for path in work_dir_paths
     }
+    # new_infile: Sequence[Optional[Path]]
+    # new_infile: Sequence[Optional[Path]]
+    old_infiles_zip: Sequence[Optional[Path]] = (
+        [None] * n if not old_infiles else old_infiles
+    )
+    new_infiles_zip: Sequence[Optional[Path]] = (
+        [None] * n if not new_infiles else new_infiles
+    )
     for old_preset, new_preset, old_infile, new_infile, path in zip(
-        old_presets, new_presets, old_infiles, new_infiles, work_dir_paths
+        old_presets, new_presets, old_infiles_zip, new_infiles_zip, work_dir_paths
     ):
         grouped[path][0].append(old_preset)
         grouped[path][1].append(new_preset)
-        grouped[path][2].append(old_infile)
-        grouped[path][3].append(new_infile)
+        if old_infile:
+            grouped[path][2].append(old_infile)
+        if new_infile:
+            grouped[path][3].append(new_infile)
     return grouped
