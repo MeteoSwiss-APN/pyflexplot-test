@@ -30,8 +30,6 @@ A couple command line options have been removed, while many new one have been ad
 
 ```
 $ pyflexplot-test -h
-Usage: pyflexplot-test [OPTIONS]
-
 Options:
   --data PATH                     path to data directory; defaults to data;
                                   overridden by --old-data and --new-data;
@@ -41,17 +39,21 @@ Options:
   --infile PATH                   input file path overriding the input file
                                   specified in the preset; incompatible with
                                   --infiles-old-new; may be omitted, passed
-                                  once or passed the same number of times as
-                                  --preset, in which case the infiles and
-                                  presets are paired in order
+                                  once (in which case the same infile is used
+                                  for all presets), passed the same number of
+                                  times as --preset/--presets-old-new (in
+                                  which case the infiles and presets are
+                                  paired in order) or passed an arbitrary
+                                  number of times if --preset/--presets-old-
+                                  new is not passed more than once (in which
+                                  case the same preset is used for all
+                                  infiles)
 
   --infiles-old-new PATH...       pair of input file paths overriding the
                                   input file specified in the old and new
-                                  preset, respectively; incompatible with
-                                  --infile; may be omitted, passed once or
-                                  passed the same number of times as --preset,
-                                  in which case the infile pairs and presets
-                                  are paired in order
+                                  preset, respectively; may be repeated (see
+                                  --infile for details); equivalent to but
+                                  incompatible with --infile
 
   --install-dir PATH              install directory in which git clones and
                                   their venvs are saved
@@ -69,10 +71,11 @@ Options:
   --old-data PATH                 path to data directory for --new-rev;
                                   overrides or defaults to --data; ignored if
                                   --infile and/or --infiles-old-new are passed
+
   --presets-old-new TEXT...       pair of presets used to create old and new
-                                  plots, respectively; may be repeated;
-                                  equivalent to (but incompatible with)
-                                  --preset
+                                  plots, respectively; may be repeated (see
+                                  --preset for details); equivalent to but
+                                  incompatible with --preset
 
   --old-rev TEXT                  old revision of pyflexplot; defaults to
                                   lanew tag; may be anything that git can
@@ -81,8 +84,17 @@ Options:
 
   --only INTEGER                  restrict the number of plots per preset
   --preset TEXT                   preset used to create plots; may be
-                                  repeated; equivalent to (but incompatible
-                                  with) --presets-old-new
+                                  repeated; equivalent to but incompatible
+                                  with --presets-old-new; may be omitted,
+                                  passed once (in which case the same preset
+                                  is used for all infiles), passed the same
+                                  number of times as --infile/--infiles-old-
+                                  new (in which case the presets and infiles
+                                  are paired in order) or passed an arbitrary
+                                  number of times if --infile/--infiles-old-
+                                  new is not passed more than once (in which
+                                  case the same infile is used for all
+                                  presets)
 
   --repo TEXT                     pyflexplot repository URL
   --reuse-installs / --reinstall  reuse venvs of existing repo clones instead
@@ -135,3 +147,4 @@ In addition to a diff plot for every plot that differs between the old and new p
 - Diff animation `animated_diff_<n_diff>x.gif`: All diff plots as an animation; look through all individual diff plots without lifting a finger.
 
 Both composites are always produced if there is at least one diff plot, without an option to disable either or both.
+Usage: pyflexplot-test [OPTIONS]
