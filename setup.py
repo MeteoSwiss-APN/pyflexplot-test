@@ -31,7 +31,7 @@ description_files = [
 
 metadata = {
     "name": "pyflexplot-test",
-    "version": "0.4.4",
+    "version": "0.4.5",
     "description": "Compare the plots created by two versions of PyFlexPlot.",
     "long_description": read_present_files(description_files),
     "author": "Stefan Ruedisuehli",
