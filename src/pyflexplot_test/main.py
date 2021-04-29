@@ -114,7 +114,7 @@ def install_exe(
     if not Path("Makefile").exists():
         raise Exception(f"missing Makefile in {os.path.abspath(os.curdir)}")
     venv_path = "venv"
-    bin_path = Path(venv_path).absolute() / "bin"
+    bin_path = Path(venv_path).resolve()() / "bin"
     exe_path = bin_path / exe
     if reuse and exe_path.exists():
         print(f"reuse existing executable {exe_path}")
@@ -277,7 +277,7 @@ def link_data_path(target_path: Path, cfg: RunConfig) -> None:
     if link_path.exists():
         if not link_path.is_symlink():
             raise Exception(
-                f"data link path {link_path.absolute()} exists and is not a symlink"
+                f"data link path {link_path.resolve()()} exists and is not a symlink"
             )
         if cfg.debug:
             print(f"DBG:{_name_}: remove existing data link path {link_path}")

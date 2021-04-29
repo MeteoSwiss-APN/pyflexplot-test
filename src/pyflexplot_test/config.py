@@ -13,7 +13,7 @@ class RunConfig:
     repo_url: str
     verbosity: int
     #
-    start_path: Path = Path(".").absolute()
+    start_path: Path = Path(".").resolve()()
 
     @property
     def verbose(self) -> bool:

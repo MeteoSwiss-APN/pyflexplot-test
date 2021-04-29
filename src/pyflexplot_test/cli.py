@@ -353,7 +353,7 @@ def cli(
 
     if cfg.debug:
         print(f"DBG:{_name_}: prepare install dir")
-    install_dir_path = install_dir_path.absolute()
+    install_dir_path = install_dir_path.resolve()()
     install_dir_path.mkdir(parents=True, exist_ok=True)
     old_install_path = install_dir_path / old_rev
     new_install_path = install_dir_path / new_rev
@@ -545,8 +545,8 @@ def prepare_data_paths(
         )
         ctx.exit(1)
     if absolute:
-        old_path = None if not old_path else old_path.absolute()
-        new_path = None if not new_path else new_path.absolute()
+        old_path = None if not old_path else old_path.resolve()()
+        new_path = None if not new_path else new_path.resolve()()
     return old_path, new_path
 
 
@@ -631,8 +631,8 @@ def prepare_presets_infiles(
         old_presets = [next(iter(old_presets)) for _ in range(n_infiles)]
         new_presets = [next(iter(new_presets)) for _ in range(n_infiles)]
     if absolute:
-        old_infiles = [path.absolute() for path in old_infiles]
-        new_infiles = [path.absolute() for path in new_infiles]
+        old_infiles = [path.resolve()() for path in old_infiles]
+        new_infiles = [path.resolve()() for path in new_infiles]
     return old_presets, new_presets, old_infiles, new_infiles
 
 
@@ -653,7 +653,7 @@ def prepare_work_dir_paths(
     if len(work_dir_paths) == 1:
         work_dir_paths = [next(iter(work_dir_paths))] * n_presets
     if len(work_dir_paths) == n_presets:
-        return [Path(path).absolute() for path in work_dir_paths]
+        return [Path(path).resolve()() for path in work_dir_paths]
     else:
         click.echo(
             f"wrong number of --work-dir ({len(work_dir_paths)}); unless omitted, must"
