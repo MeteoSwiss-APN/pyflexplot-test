@@ -195,8 +195,8 @@ def create_plots_for_preset(
         f"--preset={preset}",
     ]
     if infile:
-        if plot_cfg.data_path:
-            infile = plot_cfg.data_path / infile
+        if plot_cfg.data_path and not infile.is_absolute():
+            infile = (plot_cfg.data_path / infile).resolve()
         cmd_args += ["--setup", "infile", str(infile)]
     if cfg.only:
         cmd_args += [f"--only={cfg.only}"]

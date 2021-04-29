@@ -37,7 +37,7 @@ class PathlibPath(click.ParamType):
     # pylint: disable=W0613  # unused-argument (param, ctx)
     # pylint: disable=R0201  # no-self-use
     def convert(self, value, param, ctx) -> Path:
-        return Path(value)
+        return Path(value).expanduser()
 
 
 def check_for_active_venv(ctx: Context) -> None:
@@ -573,7 +573,6 @@ def prepare_presets_infiles(
     presets_old_new: Sequence[Tuple[str, str]],
     infiles: Sequence[Path],
     infiles_old_new: Sequence[Tuple[Path, Path]],
-    absolute: bool = True,
 ) -> Tuple[List[str], List[str], List[Path], List[Path]]:
     """Prepare preset strings and infile paths for old and new revision."""
     old_presets: List[str] = []
@@ -630,9 +629,6 @@ def prepare_presets_infiles(
         n_presets = n_infiles
         old_presets = [next(iter(old_presets)) for _ in range(n_infiles)]
         new_presets = [next(iter(new_presets)) for _ in range(n_infiles)]
-    if absolute:
-        old_infiles = [path.resolve() for path in old_infiles]
-        new_infiles = [path.resolve() for path in new_infiles]
     return old_presets, new_presets, old_infiles, new_infiles
 
 
