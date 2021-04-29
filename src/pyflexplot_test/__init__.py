@@ -8,6 +8,6 @@ from typing import List
 
 __author__ = """Stefan Ruedisuehli"""
 __email__ = "stefan.ruedisuehli@env.ethz.ch"
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 __all__: List[str] = []
