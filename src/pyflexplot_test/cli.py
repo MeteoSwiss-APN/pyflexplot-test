@@ -8,6 +8,7 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import Union
 
 # Third-party
 import click
@@ -512,14 +513,26 @@ def run_in_work_dir(
         composite_diff_plot = plot_pairs.create_composite_diff(diffs_path, cfg)
         animated_diff_plot = animate_diff_plots(diffs_path, diff_plot_paths, cfg)
         print()
-        print(f"{n_diff} new diff plots in {diffs_path.relative_to(cfg.start_path)}/")
+        print(f"{n_diff} new diff plots in {try_rel_path(diffs_path, cfg.start_path)}/")
         if cfg.verbose:
             for path in diff_plot_paths:
-                print(path.relative_to(cfg.start_path))
+                print(try_rel_path(path, cfg.start_path))
         print()
-        print(f"diff composite: {composite_diff_plot.relative_to(cfg.start_path)}")
-        print(f"diff animation: {animated_diff_plot.relative_to(cfg.start_path)}")
+        print(f"diff composite: {try_rel_path(composite_diff_plot, cfg.start_path)}")
+        print(f"diff animation: {try_rel_path(animated_diff_plot, cfg.start_path)}")
     print()
+
+
+def try_rel_path(abs_path: Union[Path, str], ref_path: Union[Path, str]) -> Path:
+    """Return ``abs_path`` relative to ``ref_path``, if possible."""
+    try:
+        return Path(abs_path).relative_to(ref_path)
+    except ValueError as e:
+        if "does not start with" in str(e):
+            return Path(abs_path)
+        raise ValueError(
+            f"unexpected error while trying to return {abs_path} relative to {ref_path}"
+        ) from e
 
 
 # pylint: disable=R0913  # too-many-arguments (>5)
