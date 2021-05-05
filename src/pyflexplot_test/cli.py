@@ -20,12 +20,12 @@ from .config import PlotConfig
 from .config import ReuseConfig
 from .config import RunConfig
 from .config import WorkDirConfig
-from .main import animate_diff_plots
-from .main import create_plots
-from .main import install_exe
-from .main import PlotPairSequence
-from .main import prepare_clone
-from .main import prepare_work_path
+from .install import install_exe
+from .install import prepare_clone
+from .plot import animate_diff_plots
+from .plot import create_plots
+from .plot import prepare_work_path
+from .plot_pair import PlotPairSequence
 from .utils import git_get_remote_tags
 
 DEFAULT_DATA_PATH = "data"
