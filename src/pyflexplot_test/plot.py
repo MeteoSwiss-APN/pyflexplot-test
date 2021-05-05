@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Iterator
 from typing import List
@@ -133,7 +134,7 @@ def create_plots_for_preset(
                 + "\n  ".join(map(str, expected_plot_paths))
             )
         i_plot += 1
-        if cfg.verbose:
+        if cfg.verbose or not sys.stdout.isatty():
             print(f"[{i_plot / n_plots:.0%}] {line}")
         else:
             print(f"\r[{i_plot / n_plots:.0%}] {i_plot}/{n_plots}", end="", flush=True)
