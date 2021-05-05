@@ -1,13 +1,13 @@
 # History
 
-## TBD
+## v0.4.10 (2021-05-05)
 
 ### Command line interface
 
 - Fix various problems with paths (absolute vs. physical, absolute vs. relative)
 - Disable progress counter when output redirected to file
 
-## v0.4.5 (2021-11-19)
+## v0.4.5 (2021-04-19)
 
 ### Command line interface
 
