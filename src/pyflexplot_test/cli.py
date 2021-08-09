@@ -570,7 +570,7 @@ def prepare_exe(
 ) -> Path:
     """Prepare clone of repo, install into virtual env and return exe path."""
     print(
-        f"prepare {case} clone or {cfg.repo_url}@{install_cfg.rev} at"
+        f"prepare {case} clone of {cfg.repo_url}@{install_cfg.rev} at"
         f" {install_cfg.path}"
     )
     prepare_clone(cfg.repo_url, install_cfg, cfg)

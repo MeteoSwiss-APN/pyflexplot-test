@@ -175,7 +175,7 @@ Project Structure
      -  Contains information about the lead developer and contributors.
    * -  LICENSE.txt
      -  Project license.
-   * -  VERSION.txt
+   * -  VERSION
      -  Package version number (incremented by ``bumpversion``).
 
    * -  Makefile
