@@ -669,6 +669,7 @@ def prepare_work_dir_paths(
             f" be passed once or as often as --preset/--presets-old-new ({n_presets})"
         )
         ctx.exit(1)
+        assert False, "unreachable"  # mypy
 
 
 def group_by_work_dir(

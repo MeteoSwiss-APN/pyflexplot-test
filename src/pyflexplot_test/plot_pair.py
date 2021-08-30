@@ -1,4 +1,6 @@
 """Plot pairs."""
+from __future__ import annotations
+
 # Standard library
 import filecmp
 import os
@@ -9,7 +11,6 @@ from pathlib import Path
 from subprocess import PIPE
 from subprocess import Popen
 from typing import Iterator
-from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Union
@@ -143,11 +144,12 @@ class PlotPair:
         cmd = " | ".join([cmd_prep, cmd_comp])
         if cfg.debug:
             print(f"DBG:{_name_}: creating diff plot with following command:\n$ {cmd}")
-        _, stderr = Popen(
+        with Popen(
             cmd_comp.split(),
             stdin=Popen(cmd_prep.split(), stdout=PIPE).stdout,
             stdout=PIPE,
-        ).communicate()
+        ) as p:
+            _, stderr = p.communicate()
         if stderr:
             raise RuntimeError(
                 f"error running command '{cmd}':\n{stderr.decode('ascii')}"
@@ -167,21 +169,23 @@ class PlotPair:
             cmd_idfy += f" -format {fmt}"
         if not trim:
             cmd_idfy += f" {path}"
-            stdout, _ = Popen(cmd_idfy.split(), stdout=PIPE).communicate()
-        else:
-            cmd_idfy += " miff:-"
-            cmd_trim = f"convert -trim {path} miff:-"
-            cmd = " | ".join([cmd_trim, cmd_idfy])
-            stdout, stderr = Popen(
-                cmd_idfy.split(),
-                stdin=Popen(cmd_trim.split(), stdout=PIPE).stdout,
-                stdout=PIPE,
-            ).communicate()
+            with Popen(cmd_idfy.split(), stdout=PIPE) as p:
+                stdout, _ = p.communicate()
+                return stdout.decode("ascii")
+        cmd_idfy += " miff:-"
+        cmd_trim = f"convert -trim {path} miff:-"
+        cmd = " | ".join([cmd_trim, cmd_idfy])
+        with Popen(
+            cmd_idfy.split(),
+            stdin=Popen(cmd_trim.split(), stdout=PIPE).stdout,
+            stdout=PIPE,
+        ) as p:
+            stdout, stderr = p.communicate()
             if stderr:
                 raise RuntimeError(
                     f"error running command '{cmd}':\n{stderr.decode('ascii')}"
                 )
-        return stdout.decode("ascii")
+            return stdout.decode("ascii")
 
 
 class PlotPairSequence:
@@ -208,7 +212,7 @@ class PlotPairSequence:
             del_missing=True,
             sort_rel=sort,
         )
-        self.pairs: List[PlotPair] = [
+        self.pairs: list[PlotPair] = [
             PlotPair(path1=old_path, path2=new_path, base1=base1, base2=base2)
             for old_path, new_path in zip(paths1, paths2)
         ]
@@ -220,7 +224,7 @@ class PlotPairSequence:
         *,
         err_ok: bool = False,
         raw: bool = False,
-    ) -> List[Path]:
+    ) -> list[Path]:
         """Create difference plots for those pairs that differ.
 
         Args:
@@ -238,7 +242,7 @@ class PlotPairSequence:
             print("warning: no pairs of plots to create diff plots")
             return []
         print(f"compare {len(self)} pairs of plots")
-        diff_paths: List[Path] = []
+        diff_paths: list[Path] = []
         for pair in self:
             try:
                 diff_path = pair.create_diff(diffs_path, cfg, raw=raw)
@@ -312,8 +316,8 @@ class PlotPairSequence:
     # pylint: disable=R0913  # too-many-arguments (>5)
     @staticmethod
     def check_paths_equiv(
-        paths1: List[Path],
-        paths2: List[Path],
+        paths1: list[Path],
+        paths2: list[Path],
         base1: Optional[Path] = None,
         base2: Optional[Path] = None,
         *,
@@ -352,7 +356,7 @@ class PlotPairSequence:
         if del_missing and err_action == "raise":
             raise ValueError("del_missing=T is incompatible with action 'raise'")
 
-        def subtract_base(paths: List[Path], base: Optional[Path]) -> List[Path]:
+        def subtract_base(paths: list[Path], base: Optional[Path]) -> list[Path]:
             if base is None:
                 return list(paths)
             return [path.relative_to(base) for path in paths]
@@ -360,10 +364,10 @@ class PlotPairSequence:
         # pylint: disable=R0913  # too-many-arguments (>5)
         def run(
             name1: str,
-            paths1: List[Path],
+            paths1: list[Path],
             base1: Optional[Path],
             name2: str,
-            paths2: List[Path],
+            paths2: list[Path],
             base2: Optional[Path],
         ) -> None:
             rel_paths1 = subtract_base(paths1, base1)
