@@ -501,6 +501,19 @@ def run_in_work_dir(
         base1=old_work_dirs_cfg.path,
         base2=new_work_dirs_cfg.path,
     )
+    if plot_pairs.missing1 or plot_pairs.missing2:
+        if plot_pairs.missing2:
+            print(
+                f"warning: {len(plot_pairs.missing2)} old plots have no new equivalent:"
+                "\n" + "\n".join(map(str, plot_pairs.missing2)),
+                file=sys.stderr,
+            )
+        if plot_pairs.missing1:
+            print(
+                f"warning: {len(plot_pairs.missing1)} new plots have no old equivalent:"
+                "\n" + "\n".join(map(str, plot_pairs.missing1)),
+                file=sys.stderr,
+            )
     diff_plot_paths = plot_pairs.create_diffs(diffs_path, cfg, err_ok=True)
     n_plots = len(plot_pairs)
     n_diff = len(diff_plot_paths)
