@@ -59,15 +59,15 @@ def run_cmd(args: Sequence[str], real_time: bool = False):
 
     def _run_cmd_real_time(proc: subprocess.Popen) -> Iterator[str]:
         assert proc.stdout is not None  # mypy
-        with proc.stdout:
-            for raw_line in iter(proc.stdout.readline, b""):
-                line = raw_line.decode("utf-8").strip()
-                yield line
+        for raw_line in iter(proc.stdout.readline, b""):
+            line = raw_line.decode("utf-8").strip()
+            yield line
         proc.wait()
         assert proc.stderr is not None  # mypy
         stderr = [raw_line.decode("utf-8") for raw_line in proc.stderr]
         raise_if_err(proc.returncode, stderr)
 
+    # pylint: disable=R1732  # consider-using-with
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if real_time:
         return _run_cmd_real_time(proc)
